@@ -5,7 +5,7 @@
 
 CUDAOBJECTS = GPU.o kernel.o kmeansCPU.o kmeansUtils.o main.o
 CC = nvcc
-EXECUTABLE = main
+EXECUTABLE = kmeans
 
 
 LFLAGS = -Wall -std=c99 -pedantic -fopenmp $(DEBUG)
@@ -44,4 +44,4 @@ $(EXECUTABLE): $(CUDAOBJECTS)
 
 clean:
 	rm $(CUDAOBJECTS)
-	rm main
+	rm kmeans
