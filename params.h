@@ -1,74 +1,84 @@
 #ifndef PARAMS_H
 #define PARAMS_H
 
+// select which NGROUP will be used (NGROUP or NGROUPCPU)
+// this is for declaration of point datatype
+//#define GROUPTYPE NGROUP
+
+// precision of floating point data type
+// double or float
+//#define DTYPE float
+
 //Parameters
 
 //Kernel block size
 #define BLOCKSIZE 256
 
 //Number of data dimensions
-#define NDIM 8
+//#define NDIM 2
 
 //Number of datapoints
-#define NPOINT 1000000
+//#define NPOINT 1864620
 
 //Number of clusters
-#define NCLUST 100
+//#define NCLUST 200
 
-//Number of groups for gpu implementation
-#define NGROUP 10
+//Number of groups (NCLUST / 10 for CPU) (20 for GPU) (1 for Super Simplified Implementations)
+//#define NGROUP 20
 
-//Number of groups for cpu implementation
-#define NGROUPCPU 100
+//#define NGROUPCPU 20
 
-//max limit of number of kmeans iterations
-#define MAXITER 3000
+//Number of kmeans iterations
+#define MAXITER 200
 
 // RNG seed
 #define SEED 73
 
 // number of cpu threads
-#define NTHREAD 16
+//#define NTHREAD 16
 
-//Structs
+// number of executions for averaging time
+//#define NRUNS 1
+
+
+// Struct Data Types //
 
 //Vector with NDIM number of features
-struct vector
+typedef struct vector
 {
-	double feat[NDIM];
-};
+	DTYPE feat[NDIM];
+}vector;
 
 //Centroid
-struct cent
+typedef struct cent
 {
 	//Centroid's pointdata
-	struct vector vec;
+	vector vec;
 
 	//Centroid's group index
 	int groupNum;
 
 	//Centroid's drift after updating
-	double drift;
+	DTYPE drift;
 
 	int count;
-};
-
+} cent;
 
 //Struct representing a datapoint
-struct point
+typedef struct point
 {
 	//Point's feature vector
-	struct vector vec;
+	vector vec;
 
 	//Indices of old and new assigned centroids
 	int centroidIndex;
 	int oldCentroid;
 
 	//Array of lower bound distances
-	double lwrBoundArr[NGROUPCPU];
+	DTYPE lwrBoundArr[GROUPTYPE];
 
 	//The current upper bound
-	double uprBound;
-};
+	DTYPE uprBound;
+}point;
 
 #endif

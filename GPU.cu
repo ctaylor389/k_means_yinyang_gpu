@@ -13,525 +13,716 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 
 void warmupGPU()
 {
-	unsigned int *dev_tmp;
-	unsigned int *tmp;
-	tmp = (unsigned int*)malloc(sizeof(unsigned int));
-	*tmp = 0;
-	cudaMalloc((unsigned int**)&dev_tmp, sizeof(unsigned int));
+    unsigned int *dev_tmp;
+    unsigned int *tmp;
+    tmp = (unsigned int*)malloc(sizeof(unsigned int));
+    *tmp = 0;
+    cudaMalloc((unsigned int**)&dev_tmp, sizeof(unsigned int));
 
-	warmup<<<1,256>>>(dev_tmp);
+    warmup<<<1,256>>>(dev_tmp);
 
-	cudaMemcpy(tmp, dev_tmp, sizeof(unsigned int), cudaMemcpyDeviceToHost);
+    cudaMemcpy(tmp, dev_tmp, sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
-	cudaDeviceSynchronize();
-	
-	cudaFree(dev_tmp);
+    cudaDeviceSynchronize();
+    
+    cudaFree(dev_tmp);
 }
 
 
 
 point *storeDatasetOnGPU(point *dataset,
-						 unsigned long int numPnt)
+                         unsigned long int numPnt)
 {
-	point * dev_inputData = NULL;
+    point * dev_inputData = NULL;
 
-	// alloc dataset to GPU
-	gpuErrchk(cudaMalloc(&dev_inputData, numPnt*sizeof(point)));
+    // alloc dataset to GPU
+    gpuErrchk(cudaMalloc(&dev_inputData, numPnt*sizeof(point)));
 
-	// copy input data to GPU
-	gpuErrchk(cudaMemcpy(dev_inputData, 
-				dataset, numPnt*sizeof(point), 
-							cudaMemcpyHostToDevice));
+    // copy input data to GPU
+    gpuErrchk(cudaMemcpy(dev_inputData, 
+                dataset, numPnt*sizeof(point), 
+                            cudaMemcpyHostToDevice));
 
-	unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
-	return dev_inputData;
+    unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
+    return dev_inputData;
 
 }
 
 cent *storeCentDataOnGPU(cent *centDataset,
-						 const unsigned int numCent)
+                         const unsigned int numCent)
 {
-	cent * dev_centInputData = NULL;
+    cent * dev_centInputData = NULL;
 
 
-	// alloc dataset and drift array to GPU
-	gpuErrchk(cudaMalloc(&dev_centInputData, numCent*sizeof(cent)));
-	
+    // alloc dataset and drift array to GPU
+    gpuErrchk(cudaMalloc(&dev_centInputData, numCent*sizeof(cent)));
+    
 
-	// copy input data to GPU
-	gpuErrchk(cudaMemcpy(dev_centInputData, 
-				centDataset, numCent*sizeof(cent), 
-							cudaMemcpyHostToDevice));
+    // copy input data to GPU
+    gpuErrchk(cudaMemcpy(dev_centInputData, 
+                centDataset, numCent*sizeof(cent), 
+                            cudaMemcpyHostToDevice));
 
 
-	unsigned int NBLOCKS = ceil(numCent*1.0/BLOCKSIZE*1.0);
-	
-	return dev_centInputData;
+    unsigned int NBLOCKS = ceil(numCent*1.0/BLOCKSIZE*1.0);
+    
+    return dev_centInputData;
 }
 
+
+
+/////////////////////////////////////////////
+// Host functions for calling CUDA kernels //
+/////////////////////////////////////////////
+
+int startFullOnGPU(point *hostDataset,
+                   cent *hostCentDataset,
+                   unsigned long long int *hostDistCalcCount,
+                   double *fullStartTime,
+                   double *fullEndTime,
+                   unsigned int *ranIter)
+{
+    int countFlag;
+
+    if(hostDistCalcCount == NULL)
+    countFlag = 0;
+    else
+    countFlag = 1;
+
+    // start timer
+    *fullStartTime = omp_get_wtime();
+
+    // variable initialization
+
+    unsigned int hostConFlag = 1;
+
+    unsigned int *hostConFlagPtr = &hostConFlag;
+    
+    unsigned int index = 0;
+
+    unsigned int NBLOCKS = ceil(NPOINT*1.0/BLOCKSIZE*1.0);
+
+
+    // group centroids
+    groupCent(hostCentDataset, NCLUST, NGROUP, NDIM);
+
+    // store dataset on device
+    point *devDataset;
+
+    devDataset = storeDatasetOnGPU(hostDataset, NPOINT);
+
+    // store centroids on device
+    cent *devCentDataset;
+
+    devCentDataset = storeCentDataOnGPU(hostCentDataset, NCLUST);
+
+    unsigned long long int *devDistCalcCount = NULL;
+
+    if(countFlag)
+    {
+        // allocate device-only data
+        gpuErrchk(cudaMalloc(&devDistCalcCount, sizeof(unsigned long long int)));
+
+        gpuErrchk(cudaMemcpy(devDistCalcCount, 
+                hostDistCalcCount, sizeof(unsigned long long int), 
+                            cudaMemcpyHostToDevice));
+    }
+
+    DTYPE *devMaxDriftArr = NULL;
+    cudaMalloc(&devMaxDriftArr, NGROUP*sizeof(DTYPE));
+
+    // centroid calculation data
+    struct vector *devNewCentSum = NULL;
+    cudaMalloc(&devNewCentSum, NCLUST*sizeof(vector));
+
+    struct vector *devOldCentSum = NULL;
+    cudaMalloc(&devOldCentSum, NCLUST*sizeof(vector));
+
+    unsigned int *devNewCentCount = NULL;
+    cudaMalloc(&devNewCentCount, NCLUST*sizeof(unsigned int));
+
+    unsigned int *devOldCentCount = NULL;
+    cudaMalloc(&devOldCentCount, NCLUST*sizeof(unsigned int));
+
+    unsigned int *devConFlag = NULL;
+    cudaMalloc(&devConFlag, sizeof(unsigned int));
+
+    gpuErrchk(cudaMemcpy(devConFlag,
+            hostConFlagPtr, sizeof(unsigned int),
+                        cudaMemcpyHostToDevice));
+
+
+    clearCentCalcData<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
+                                              devOldCentSum,
+                                              devNewCentCount,
+                                              devOldCentCount);
+
+    clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr);
+
+    // do single run of naive kmeans for initial centroid assignments
+    if(countFlag)
+    initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devCentDataset, devDistCalcCount);
+    else
+    initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devCentDataset);
+
+    // loop until convergence
+    while(hostConFlag && index < MAXITER)
+    {
+        hostConFlag = 0;
+        
+        gpuErrchk(cudaMemcpy(devConFlag,
+            hostConFlagPtr, sizeof(unsigned int),
+                        cudaMemcpyHostToDevice));
+
+        // clear maintained data on device
+        clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr);
+
+        clearCentCalcData<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
+                                                  devOldCentSum,
+                                                  devNewCentCount,
+                                                  devOldCentCount);
+
+        // calculate data necessary to make new centroids
+        calcCentData<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                             devCentDataset,
+                                             devOldCentSum,
+                                             devNewCentSum,
+                                             devOldCentCount,
+                                             devNewCentCount);
+
+        // make new centroids
+        calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                                 devCentDataset,
+                                                 devMaxDriftArr,
+                                                 devOldCentSum,
+                                                 devNewCentSum,
+                                                 devOldCentCount,
+                                                 devNewCentCount);
+
+        if(countFlag)
+        {
+            assignPointsFull<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                                     devCentDataset,
+                                                     devMaxDriftArr,
+                                                     devDistCalcCount);
+        }
+        else
+        {
+            assignPointsFull<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                                     devCentDataset,
+                                                     devMaxDriftArr);
+        }
+
+        checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devConFlag);
+        index++;
+        gpuErrchk(cudaMemcpy(hostConFlagPtr,
+            devConFlag, sizeof(unsigned int),
+                        cudaMemcpyDeviceToHost));
+    }
+    cudaDeviceSynchronize();
+
+    // copy finished clusters and points from device to host
+    gpuErrchk(cudaMemcpy(hostDataset,
+                devDataset, NPOINT*sizeof(struct point),
+                            cudaMemcpyDeviceToHost));
+    gpuErrchk(cudaMemcpy(hostCentDataset,
+                devCentDataset, NCLUST*sizeof(struct cent),
+                            cudaMemcpyDeviceToHost));
+
+    *fullEndTime = omp_get_wtime();
+
+    if(countFlag)
+    {
+        gpuErrchk(cudaMemcpy(hostDistCalcCount, 
+                   devDistCalcCount, sizeof(unsigned long long int), 
+                                cudaMemcpyDeviceToHost));
+        cudaFree(devDistCalcCount);
+    }
+
+
+    *ranIter = index + 1;
+
+
+    // clean up, return
+    cudaFree(devMaxDriftArr);
+    cudaFree(devNewCentSum);
+    cudaFree(devOldCentSum);
+    cudaFree(devNewCentCount);
+    cudaFree(devOldCentCount);
+    cudaFree(devDataset);
+    cudaFree(devCentDataset);
+    cudaFree(devConFlag);
+
+    
+    return 0;
+}
 
 /*
 function containing master loop that calls yinyang kernels
 */
-int startYinYangOnGPU(point *hostDataset,
-					  cent *hostCentDataset,
-					  unsigned long long int *hostDistCalcCount,
-					  double *yinStartTime,
-					  double *yinEndTime,
-					  unsigned int *ranIter)
+int startSimpleOnGPU(point *hostDataset,
+                     cent *hostCentDataset,
+                     unsigned long long int *hostDistCalcCount,
+                     double *simpStartTime,
+                     double *simpEndTime,
+                     unsigned int *ranIter)
 {
+    unsigned int countFlag;
+    if(hostDistCalcCount == NULL)
+    countFlag = 0;
+    else
+    countFlag = 1;
 
-	// start timer
-	*yinStartTime = omp_get_wtime();
+    // start timer
+    *simpStartTime = omp_get_wtime();
 
+    // variable initialization
 
+    unsigned int hostConFlag = 1;
+    unsigned int *hostConFlagPtr = &hostConFlag;
+    unsigned int index = 0;
+    unsigned int NBLOCKS = ceil(NPOINT*1.0/BLOCKSIZE*1.0);
 
+    // group centroids
+    groupCent(hostCentDataset, NCLUST, NGROUP, NDIM);
 
-	// variable initialization
+    // store dataset on device
+    point *devDataset;
 
-	unsigned int hostConFlag = 1;
+    devDataset = storeDatasetOnGPU(hostDataset, NPOINT);
 
-	unsigned int *hostConFlagPtr = &hostConFlag;
-	
-	unsigned int index = 0;
+    // store centroids on device
+    cent *devCentDataset;
 
-	unsigned int NBLOCKS = ceil(NPOINT*1.0/BLOCKSIZE*1.0);
+    devCentDataset = storeCentDataOnGPU(hostCentDataset,
+                                        NCLUST);
 
+    // allocate device-only data
+    unsigned long long int *devDistCalcCount = NULL;
 
-	// group centroids
-	groupCent(hostCentDataset, NCLUST, NGROUP, NDIM);
+    if(countFlag)
+    {
+        // allocate device-only data
+        gpuErrchk(cudaMalloc(&devDistCalcCount, sizeof(unsigned long long int)));
 
-	// store dataset on device
-	point *devDataset;
-
-	devDataset = storeDatasetOnGPU(hostDataset, NPOINT);
-
-	// store centroids on device
-	cent *devCentDataset;
-
-	devCentDataset = storeCentDataOnGPU(hostCentDataset,
-										NCLUST);
-
-	// allocate device-only data
-	unsigned long long int *devDistCalcCount = NULL;
-
-	gpuErrchk(cudaMalloc(&devDistCalcCount, sizeof(unsigned long long int)));
-	
-	gpuErrchk(cudaMemcpy(devDistCalcCount, 
-			hostDistCalcCount, sizeof(unsigned long long int), 
-						cudaMemcpyHostToDevice));
-
-
-	double *devMaxDriftArr = NULL;
-	cudaMalloc(&devMaxDriftArr, NGROUP*sizeof(double));
-
-	// centroid calculation data
-	struct vector *devNewCentSum = NULL;
-	cudaMalloc(&devNewCentSum, NCLUST*sizeof(vector));
-
-	struct vector *devOldCentSum = NULL;
-	cudaMalloc(&devOldCentSum, NCLUST*sizeof(vector));
-
-	unsigned int *devNewCentCount = NULL;
-	cudaMalloc(&devNewCentCount, NCLUST*sizeof(unsigned int));
-
-	unsigned int *devOldCentCount = NULL;
-	cudaMalloc(&devOldCentCount, NCLUST*sizeof(unsigned int));
-
-	unsigned int *devConFlag = NULL;
-	cudaMalloc(&devConFlag, sizeof(unsigned int));
-
-	gpuErrchk(cudaMemcpy(devConFlag, 
-			hostConFlagPtr, sizeof(unsigned int), 
-						cudaMemcpyHostToDevice));
-
-	
-
-	clearCentCalcData<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
-											  devOldCentSum,
-											  devNewCentCount,
-											  devOldCentCount);
-											  
-	clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr);
+        gpuErrchk(cudaMemcpy(devDistCalcCount, 
+                hostDistCalcCount, sizeof(unsigned long long int), 
+                            cudaMemcpyHostToDevice));
+    }
 
 
+    DTYPE *devMaxDriftArr = NULL;
+    cudaMalloc(&devMaxDriftArr, NGROUP*sizeof(DTYPE));
 
-	// do single run of naive kmeans for initial centroid assignments	
-	initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devDataset, 
-										 devCentDataset,
-										 devDistCalcCount);
+    // centroid calculation data
+    struct vector *devNewCentSum = NULL;
+    cudaMalloc(&devNewCentSum, NCLUST*sizeof(vector));
 
+    struct vector *devOldCentSum = NULL;
+    cudaMalloc(&devOldCentSum, NCLUST*sizeof(vector));
 
-	// loop until convergence
-	while(hostConFlag && index < MAXITER)
-	{
-		hostConFlag = 0;
-		
-		gpuErrchk(cudaMemcpy(devConFlag, 
-			hostConFlagPtr, sizeof(unsigned int), 
-						cudaMemcpyHostToDevice));	
+    unsigned int *devNewCentCount = NULL;
+    cudaMalloc(&devNewCentCount, NCLUST*sizeof(unsigned int));
 
-						
-		// clear maintained data on device
-		clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr);
-		
-		clearCentCalcData<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
-											  	devOldCentSum,
-											  	devNewCentCount,
-											  	devOldCentCount);
+    unsigned int *devOldCentCount = NULL;
+    cudaMalloc(&devOldCentCount, NCLUST*sizeof(unsigned int));
 
+    unsigned int *devConFlag = NULL;
+    cudaMalloc(&devConFlag, sizeof(unsigned int));
 
-		// calculate data necessary to make new centroids
-		calcCentData<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
-					 						 devCentDataset,
-					 						 devOldCentSum,
-					 						 devNewCentSum,
-					 						 devOldCentCount,
-					 						 devNewCentCount);
+    gpuErrchk(cudaMemcpy(devConFlag, 
+            hostConFlagPtr, sizeof(unsigned int), 
+                        cudaMemcpyHostToDevice));
 
-		// make new centroids
-		calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
-						 						 devCentDataset,
-						 						 devMaxDriftArr,
-						 						 devOldCentSum,
-						 						 devNewCentSum,
-						 						 devOldCentCount,
-						 						 devNewCentCount);
+    
 
-						 						 
-		// update point assignments via assignPointsernel
-		assignPointsYinyang<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
-												    devCentDataset,
-												    devMaxDriftArr,
-												    devDistCalcCount);
-
-		checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devConFlag);					   
-		index++;
-		gpuErrchk(cudaMemcpy(hostConFlagPtr, 
-			devConFlag, sizeof(unsigned int), 
-						cudaMemcpyDeviceToHost));
-	}
-
-	cudaDeviceSynchronize();
+    clearCentCalcData<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
+                                              devOldCentSum,
+                                              devNewCentCount,
+                                              devOldCentCount);
+                                              
+    clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr);
 
 
-	//printf("\ntotal iter: %d\n", index);
-	
-	// copy finished clusters and points from device to host
-	gpuErrchk(cudaMemcpy(hostDataset,
-				devDataset, NPOINT*sizeof(struct point),
-							cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(hostCentDataset,
-				devCentDataset, NCLUST*sizeof(struct cent),
-							cudaMemcpyDeviceToHost));
 
-	*yinEndTime = omp_get_wtime();
+    // do single run of naive kmeans for initial centroid assignments
+    if(countFlag)
+    initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devCentDataset, devDistCalcCount);
+    else
+    initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devCentDataset);
 
-	*ranIter = index + 1;
+    // loop until convergence
+    while(hostConFlag && index < MAXITER)
+    {
+        hostConFlag = 0;
+        
+        gpuErrchk(cudaMemcpy(devConFlag, 
+            hostConFlagPtr, sizeof(unsigned int), 
+                        cudaMemcpyHostToDevice));	
 
-	// clean up, return
-	cudaFree(devDistCalcCount);
-	cudaFree(devMaxDriftArr);
-	cudaFree(devNewCentSum);
-	cudaFree(devOldCentSum);
-	cudaFree(devNewCentCount);
-	cudaFree(devOldCentCount);
-	cudaFree(devDataset);
-	cudaFree(devCentDataset);
-	cudaFree(devConFlag);
+        // clear maintained data on device
+        clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr);
+        
+        /*clearCentCalcData<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
+                                                  devOldCentSum,
+                                                  devNewCentCount,
+                                                  devOldCentCount);*/
 
-	
-	return 0;
+
+        // calculate data necessary to make new centroids
+        calcCentData<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                              devCentDataset,
+                                              devOldCentSum,
+                                              devNewCentSum,
+                                              devOldCentCount,
+                                              devNewCentCount);
+
+        // make new centroids
+        calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                                  devCentDataset,
+                                                  devMaxDriftArr,
+                                                  devOldCentSum,
+                                                  devNewCentSum,
+                                                  devOldCentCount,
+                                                  devNewCentCount);
+
+        cudaDeviceSynchronize();
+        // update point assignments via assignPointsernel
+        if(countFlag)
+        {
+            assignPointsSimple<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                                       devCentDataset,
+                                                       devMaxDriftArr,
+                                                       devDistCalcCount);
+        }
+        else
+        {
+            assignPointsSimple<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                                       devCentDataset,
+                                                       devMaxDriftArr);
+        }
+
+        checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devConFlag);
+        index++;
+        gpuErrchk(cudaMemcpy(hostConFlagPtr, 
+            devConFlag, sizeof(unsigned int), 
+                        cudaMemcpyDeviceToHost));
+    }
+    cudaDeviceSynchronize();
+
+    // copy finished clusters and points from device to host
+    gpuErrchk(cudaMemcpy(hostDataset,
+                devDataset, NPOINT*sizeof(struct point),
+                            cudaMemcpyDeviceToHost));
+    gpuErrchk(cudaMemcpy(hostCentDataset,
+                devCentDataset, NCLUST*sizeof(struct cent),
+                            cudaMemcpyDeviceToHost));
+
+    *simpEndTime = omp_get_wtime();
+
+    if(countFlag)
+    {
+        gpuErrchk(cudaMemcpy(hostDistCalcCount, 
+                    devDistCalcCount, sizeof(unsigned long long int), 
+                                cudaMemcpyDeviceToHost));
+        cudaFree(devDistCalcCount);
+    }
+
+    *ranIter = index + 1;
+
+    // clean up, return
+    cudaFree(devMaxDriftArr);
+    cudaFree(devNewCentSum);
+    cudaFree(devOldCentSum);
+    cudaFree(devNewCentCount);
+    cudaFree(devOldCentCount);
+    cudaFree(devDataset);
+    cudaFree(devCentDataset);
+    cudaFree(devConFlag);
+    
+    return 0;
 }
 
 
 
 
 int startLloydOnGPU(point *hostDataset,
-					cent *hostCentDataset,
-					double *lloydStartTime,
-					double *lloydEndTime,
-					unsigned int *ranIter)
+                    cent *hostCentDataset,
+                    double *lloydStartTime,
+                    double *lloydEndTime,
+                    unsigned int *ranIter)
 {
 
 
-	// start timer
-	*lloydStartTime = omp_get_wtime();
+    // start timer
+    *lloydStartTime = omp_get_wtime();
+
+    unsigned int hostConFlag = 1;
+    unsigned int *hostConFlagPtr = &hostConFlag;
+    unsigned int index = 0;
+
+    // store dataset on device
+    point *devDataset;
+
+    devDataset = storeDatasetOnGPU(hostDataset, NPOINT);
+
+    // store centroids on device
+    cent *devCentDataset;
+
+    devCentDataset = storeCentDataOnGPU(hostCentDataset,
+                                        NCLUST);
+
+    unsigned int NBLOCKS = ceil(NPOINT*1.0/BLOCKSIZE*1.0);
+
+    unsigned int *devNewCentCount = NULL;
+    cudaMalloc(&devNewCentCount, NCLUST * sizeof(unsigned int));
+
+    vector *devNewCentSum = NULL;
+    cudaMalloc(&devNewCentSum, NCLUST * sizeof(vector));
+
+    unsigned int *devConFlag = NULL;
+    cudaMalloc(&devConFlag, sizeof(unsigned int));
+
+    gpuErrchk(cudaMemcpy(devConFlag, 
+            hostConFlagPtr, sizeof(unsigned int), 
+                        cudaMemcpyHostToDevice));
+    
+
+    clearCentCalcDataLloyd<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
+                                                    devNewCentCount);
+
+    // master loop for maxIter runs
+    while(hostConFlag && index < MAXITER)
+    {
+        hostConFlag = 0;
+        
+        gpuErrchk(cudaMemcpy(devConFlag, 
+            hostConFlagPtr, sizeof(unsigned int), 
+                        cudaMemcpyHostToDevice));
+        
+        // update point assignments via assignPointsernel
+        assignPointsLloyd<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                                   devCentDataset);
 
 
-	unsigned int hostConFlag = 1;
+        calcCentDataLloyd<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                              devCentDataset,
+                                              devNewCentSum,
+                                              devNewCentCount);
+    
+        calcNewCentroidsLloyd<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                                  devCentDataset,
+                                                  devNewCentSum,
+                                                  devNewCentCount);
 
-	unsigned int *hostConFlagPtr = &hostConFlag;
-	
-	unsigned int index = 0;
+        checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devConFlag);					   
+        
+        index++;
+        gpuErrchk(cudaMemcpy(hostConFlagPtr, 
+            devConFlag, sizeof(unsigned int), 
+                        cudaMemcpyDeviceToHost));
+    }
+    cudaDeviceSynchronize();
+    
+    // copy assigned data from device to host
+    gpuErrchk(cudaMemcpy(hostDataset,
+                devDataset, NPOINT * sizeof(point),
+                            cudaMemcpyDeviceToHost));
+    gpuErrchk(cudaMemcpy(hostCentDataset,
+                devCentDataset, NCLUST * sizeof(cent),
+                            cudaMemcpyDeviceToHost));
+    *lloydEndTime = omp_get_wtime();
 
+    *ranIter = index;
 
-	// store dataset on device
-	point *devDataset;
-
-	devDataset = storeDatasetOnGPU(hostDataset, NPOINT);
-
-	// store centroids on device
-	cent *devCentDataset;
-
-	devCentDataset = storeCentDataOnGPU(hostCentDataset,
-										NCLUST);
-
-
-	unsigned int NBLOCKS = ceil(NPOINT*1.0/BLOCKSIZE*1.0);
-
-	unsigned int *devNewCentCount = NULL;
-	cudaMalloc(&devNewCentCount, NCLUST * sizeof(unsigned int));
-
-	struct vector *devNewCentSum = NULL;
-	cudaMalloc(&devNewCentSum, NCLUST * sizeof(vector));
-
-
-
-	unsigned int *devConFlag = NULL;
-	cudaMalloc(&devConFlag, sizeof(unsigned int));
-
-	gpuErrchk(cudaMemcpy(devConFlag, 
-			hostConFlagPtr, sizeof(unsigned int), 
-						cudaMemcpyHostToDevice));
-	
-
-	clearCentCalcDataLloyd<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
-											 	   devNewCentCount);
-
-	// master loop for maxIter runs
-	while(hostConFlag && index < MAXITER)
-	{
-		hostConFlag = 0;
-		
-		gpuErrchk(cudaMemcpy(devConFlag, 
-			hostConFlagPtr, sizeof(unsigned int), 
-						cudaMemcpyHostToDevice));
-		
-		// update point assignments via assignPointsernel
-		assignPointsLloyd<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
-												   devCentDataset);
-
-
-		calcCentDataLloyd<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
-					 						 devCentDataset,
-					 						 devNewCentSum,
-					 						 devNewCentCount);
-	
-		calcNewCentroidsLloyd<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
-						 						 devCentDataset,
-						 						 devNewCentSum,
-						 						 devNewCentCount);
-
-
-		checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devConFlag);					   
-		
-		index++;
-		gpuErrchk(cudaMemcpy(hostConFlagPtr, 
-			devConFlag, sizeof(unsigned int), 
-						cudaMemcpyDeviceToHost));
-	}
-
-
-	cudaDeviceSynchronize();
-
-
-	//printf("\ntotal iter: %d\n", index);
-	
-	// copy assigned data from device to host
-	gpuErrchk(cudaMemcpy(hostDataset,
-				devDataset, NPOINT * sizeof(point),
-							cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(hostCentDataset,
-				devCentDataset, NCLUST * sizeof(cent),
-							cudaMemcpyDeviceToHost));
-	*lloydEndTime = omp_get_wtime();
-
-	*ranIter = index;
-
-	cudaFree(devDataset);
-	cudaFree(devCentDataset);
-	cudaFree(devNewCentCount);
-	cudaFree(devNewCentSum);
-	cudaFree(devConFlag);
-	return 0;
+    cudaFree(devDataset);
+    cudaFree(devCentDataset);
+    cudaFree(devNewCentCount);
+    cudaFree(devNewCentSum);
+    cudaFree(devConFlag);
+    return 0;
 }
 
 
 
 /*
-function containing master loop that calls yinyang kernels
+function containing master loop that 
+calls yinyang super simplified kernels
 */
-int startHamerlyOnGPU(point *hostDataset,
-					  cent *hostCentDataset,
-					  unsigned long long int *hostDistCalcCount,
-					  double *hamStartTime,
-					  double *hamEndTime,
-					  unsigned int *ranIter)
+int startSuperOnGPU(point *hostDataset,
+                      cent *hostCentDataset,
+                      unsigned long long int *hostDistCalcCount,
+                      double *supStartTime,
+                      double *supEndTime,
+                      unsigned int *ranIter)
 {
 
-	// start timer
-	*hamStartTime = omp_get_wtime();
+    unsigned int countFlag;
+    if(hostDistCalcCount == NULL)
+    countFlag = 0;
+    else
+    countFlag = 1;
 
-	unsigned int hostConFlag = 1;
+    // start timer
+    *supStartTime = omp_get_wtime();
 
-	unsigned int *hostConFlagPtr = &hostConFlag;
-	
-	unsigned int index = 0;
-	
+    unsigned int clustIndex;
+    unsigned int index = 0;
+    unsigned int hostConFlag = 1;
+    unsigned int *hostConFlagPtr = &hostConFlag;
+    unsigned int NBLOCKS = ceil(NPOINT*1.0/BLOCKSIZE*1.0);
 
-	unsigned int clustIndex;
+    // assign all centroids to 0 group
+    for(clustIndex = 0; clustIndex < NCLUST; clustIndex++)
+    {
+        hostCentDataset[clustIndex].groupNum = 0;
+    }
 
-	unsigned int NBLOCKS = ceil(NPOINT*1.0/BLOCKSIZE*1.0);
+    // store dataset on device
+    point *devDataset;
 
-	// assign all centroids to 0 group
-	for(clustIndex = 0; clustIndex < NCLUST; clustIndex++)
-	{
-		hostCentDataset[clustIndex].groupNum = 0;
-	}
+    devDataset = storeDatasetOnGPU(hostDataset, NPOINT);
 
-	// store dataset on device
-	point *devDataset;
+    // store centroids on device
+    cent *devCentDataset;
 
-	devDataset = storeDatasetOnGPU(hostDataset, NPOINT);
+    devCentDataset = storeCentDataOnGPU(hostCentDataset,
+                                        NCLUST);
 
-	// store centroids on device
-	cent *devCentDataset;
+    // allocate a count on the GPU
+    unsigned long long int *devDistCalcCount = NULL;
+    
+    if(countFlag)
+    {
+        gpuErrchk(cudaMalloc(&devDistCalcCount, sizeof(unsigned long long int)));
 
-	devCentDataset = storeCentDataOnGPU(hostCentDataset,
-										NCLUST);
+        gpuErrchk(cudaMemcpy(devDistCalcCount, 
+                hostDistCalcCount, sizeof(unsigned long long int), 
+                            cudaMemcpyHostToDevice));
+    }
 
-	// allocate a count on the GPU
-	unsigned long long int *devDistCalcCount = NULL;
+    DTYPE *devMaxDriftArr = NULL;
+    cudaMalloc(&devMaxDriftArr, NGROUP*sizeof(DTYPE));
 
-	gpuErrchk(cudaMalloc(&devDistCalcCount, sizeof(unsigned long long int)));
+    // centroid calculation data
+    struct vector *devNewCentSum = NULL;
+    cudaMalloc(&devNewCentSum, NCLUST*sizeof(vector));
 
-	gpuErrchk(cudaMemcpy(devDistCalcCount, 
-			hostDistCalcCount, sizeof(unsigned long long int), 
-						cudaMemcpyHostToDevice));
+    struct vector *devOldCentSum = NULL;
+    cudaMalloc(&devOldCentSum, NCLUST*sizeof(vector));
 
-	double *devMaxDriftArr = NULL;
-	cudaMalloc(&devMaxDriftArr, NGROUP*sizeof(double));
+    unsigned int *devNewCentCount = NULL;
+    cudaMalloc(&devNewCentCount, NCLUST*sizeof(unsigned int));
 
-	// centroid calculation data
-	struct vector *devNewCentSum = NULL;
-	cudaMalloc(&devNewCentSum, NCLUST*sizeof(vector));
+    unsigned int *devOldCentCount = NULL;
+    cudaMalloc(&devOldCentCount, NCLUST*sizeof(unsigned int));
 
-	struct vector *devOldCentSum = NULL;
-	cudaMalloc(&devOldCentSum, NCLUST*sizeof(vector));
+    unsigned int *devConFlag = NULL;
+    cudaMalloc(&devConFlag, sizeof(unsigned int));
 
-	unsigned int *devNewCentCount = NULL;
-	cudaMalloc(&devNewCentCount, NCLUST*sizeof(unsigned int));
+    gpuErrchk(cudaMemcpy(devConFlag, 
+            hostConFlagPtr, sizeof(unsigned int), 
+                        cudaMemcpyHostToDevice));
+    
+    clearCentCalcData<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
+                                                  devOldCentSum,
+                                                  devNewCentCount,
+                                                  devOldCentCount);
 
-	unsigned int *devOldCentCount = NULL;
-	cudaMalloc(&devOldCentCount, NCLUST*sizeof(unsigned int));
+    clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr);
 
+    // do single run of naive kmeans for initial centroid assignments	
+    if(countFlag)
+    initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devCentDataset, devDistCalcCount);
+    else
+    initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devCentDataset);
 
-	unsigned int *devConFlag = NULL;
-	cudaMalloc(&devConFlag, sizeof(unsigned int));
+    // master loop for maxIter runs
+    while(hostConFlag && index < MAXITER)
+    {
+        hostConFlag = 0;
 
-	gpuErrchk(cudaMemcpy(devConFlag, 
-			hostConFlagPtr, sizeof(unsigned int), 
-						cudaMemcpyHostToDevice));
-	
+        gpuErrchk(cudaMemcpy(devConFlag, 
+            hostConFlagPtr, sizeof(unsigned int), 
+                            cudaMemcpyHostToDevice));
 
+        clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr);
 
-	clearCentCalcData<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
-											  	devOldCentSum,
-											  	devNewCentCount,
-											  	devOldCentCount);
+        clearCentCalcData<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
+                                                  devOldCentSum,
+                                                  devNewCentCount,
+                                                  devOldCentCount);
 
+        calcCentData<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                              devCentDataset,
+                                              devOldCentSum,
+                                              devNewCentSum,
+                                              devOldCentCount,
+                                              devNewCentCount);
+    
+        calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                                  devCentDataset,
+                                                  devMaxDriftArr,
+                                                  devOldCentSum,
+                                                  devNewCentSum,
+                                                  devOldCentCount,
+                                                  devNewCentCount);
 
+        // update point assignments via assignPointsernel
+        if(countFlag)
+        {
+            assignPointsSuper<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                                      devCentDataset,
+                                                      devMaxDriftArr,
+                                                      devDistCalcCount);
+        }
+        else
+        {
+            assignPointsSuper<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
+                                                      devCentDataset,
+                                                      devMaxDriftArr);            
+        }
 
-											  
-	clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr);
+        checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devConFlag);
 
-	// do single run of naive kmeans for initial centroid assignments	
-	initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devDataset, 
-										 devCentDataset,
-										 devDistCalcCount);
+        index++;
+        gpuErrchk(cudaMemcpy(hostConFlagPtr, 
+            devConFlag, sizeof(unsigned int), 
+                        cudaMemcpyDeviceToHost));
+    }
+    cudaDeviceSynchronize();
 
+    // copy assigned data from device to host
+    gpuErrchk(cudaMemcpy(hostDataset,
+                devDataset, NPOINT*sizeof(point),
+                            cudaMemcpyDeviceToHost));
+    gpuErrchk(cudaMemcpy(hostCentDataset,
+                devCentDataset, NCLUST*sizeof(cent),
+                            cudaMemcpyDeviceToHost));
 
+    *supEndTime = omp_get_wtime();
 
-	// master loop for maxIter runs
-	while(hostConFlag && index < MAXITER)
-	{
-
-		hostConFlag = 0;
-
-		gpuErrchk(cudaMemcpy(devConFlag, 
-			hostConFlagPtr, sizeof(unsigned int), 
-						cudaMemcpyHostToDevice));
-	
-		clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr);
-
-		clearCentCalcData<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
-												  devOldCentSum,
-												  devNewCentCount,
-												  devOldCentCount);
-
-
-		calcCentData<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
-					 						 devCentDataset,
-					 						 devOldCentSum,
-					 						 devNewCentSum,
-					 						 devOldCentCount,
-					 						 devNewCentCount);
-	
-		calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
-						 						 devCentDataset,
-						 						 devMaxDriftArr,
-						 						 devOldCentSum,
-						 						 devNewCentSum,
-						 						 devOldCentCount,
-						 						 devNewCentCount);
-
-		
-		// update point assignments via assignPointsernel
-		assignPointsHamerly<<<NBLOCKS, BLOCKSIZE>>>(devDataset,
-												    devCentDataset,
-												    devMaxDriftArr,
-												   	devDistCalcCount);
-
-		checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devDataset, devConFlag);
-
-		index++;
-		gpuErrchk(cudaMemcpy(hostConFlagPtr, 
-			devConFlag, sizeof(unsigned int), 
-						cudaMemcpyDeviceToHost));
-
-
-	}
-
-	cudaDeviceSynchronize();
-	
-	
-
-	// copy assigned data from device to host
-	gpuErrchk(cudaMemcpy(hostDataset,
-				devDataset, NPOINT*sizeof(point),
-							cudaMemcpyDeviceToHost));
-	gpuErrchk(cudaMemcpy(hostCentDataset,
-				devCentDataset, NCLUST*sizeof(cent),
-							cudaMemcpyDeviceToHost));
-
-
-	*hamEndTime = omp_get_wtime();
-
-
-	*ranIter = index + 1;
+    if(countFlag)
+    {
+        gpuErrchk(cudaMemcpy(hostDistCalcCount, 
+                    devDistCalcCount, sizeof(unsigned long long int), 
+                                cudaMemcpyDeviceToHost));
+        cudaFree(devDistCalcCount);
+    }
 
 
-	cudaFree(devDataset);
-	cudaFree(devCentDataset);
-	cudaFree(devMaxDriftArr);
-	cudaFree(devNewCentSum);
-	cudaFree(devOldCentSum);
-	cudaFree(devNewCentCount);
-	cudaFree(devOldCentCount);
-	cudaFree(devConFlag);
-	
-	return 0;
+    *ranIter = index + 1;
+
+    cudaFree(devDataset);
+    cudaFree(devCentDataset);
+    cudaFree(devMaxDriftArr);
+    cudaFree(devNewCentSum);
+    cudaFree(devOldCentSum);
+    cudaFree(devNewCentCount);
+    cudaFree(devOldCentCount);
+    cudaFree(devConFlag);
+    
+    return 0;
 }
 
 

@@ -12,7 +12,7 @@
 
 
 
-double calcDisCPU(vector vec1,
+DTYPE calcDisCPU(vector vec1,
 				  vector vec2,
 				  const unsigned int numDim);
 

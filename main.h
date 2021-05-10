@@ -13,10 +13,14 @@
 #include "kmeansUtils.h"
 #include "GPU.h"
 
-#define YINCODE 0
-#define YINCODECPU 1
-#define LLOYDCODE 2
-#define LLOYDCODECPU 3
-#define HAMCODE 4
+#define FULLCODE 0
+#define FULLCODECPU 1
+#define SIMPLECODE 2
+#define SIMPLECODECPU 3
+#define SUPERCODE 4
+#define SUPERCODECPU 5
+#define LLOYDCODE 6
+#define LLOYDCODECPU 7
+
 
 #endif 

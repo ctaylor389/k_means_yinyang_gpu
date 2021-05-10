@@ -1,12 +1,12 @@
 #include "kmeansUtils.h"
 
 
-double calcDisCPU(vector vec1,
+DTYPE calcDisCPU(vector vec1,
 				  vector vec2,
 				  const unsigned int numDim)
 {
 	unsigned int index;
-	double total = 0.0;
+	DTYPE total = 0.0;
 
 	for(index = 0; index < numDim; index++)
 	{
@@ -68,7 +68,7 @@ int importDataset(const char *fname,
 	int i;
 	int j = 0;
 	char fileLine[5000];
-	double feat[numDim];
+	DTYPE feat[numDim];
 	char *splitTok;
 	
 
@@ -114,7 +114,7 @@ int generateRandCent(cent *centDataset,
 	srand(seed + 1);
 
 	unsigned int centIndex, dimIndex;
-	double newFeat;
+	DTYPE newFeat;
 
 	char writeString[5000];
 
@@ -129,7 +129,7 @@ int generateRandCent(cent *centDataset,
 		sprintf(writeString, " ");
 		for(dimIndex = 0; dimIndex < numDim; dimIndex++)
 		{
-			newFeat = 2.0*((double)(rand()) / RAND_MAX);
+			newFeat = 2.0*((DTYPE)(rand()) / RAND_MAX);
 			centDataset[centIndex].vec.feat[dimIndex] = newFeat;
 			if(dimIndex != 0 && dimIndex != numDim)
 			{
@@ -210,9 +210,9 @@ int groupCent(cent *centDataset,
 
 
 
-	double currMin = INFINITY;
-	double currDistance = INFINITY;
-	double origVec[numGrps][numDim];
+	DTYPE currMin = INFINITY;
+	DTYPE currDistance = INFINITY;
+	DTYPE origVec[numGrps][numDim];
 
 	for(iterIndex = 0; iterIndex < 5; iterIndex++)
 	{
