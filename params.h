@@ -3,11 +3,11 @@
 
 // select which NGROUP will be used (NGROUP or NGROUPCPU)
 // this is for declaration of point datatype
-//#define GROUPTYPE NGROUP
+#define GROUPTYPE NGROUP
 
 // precision of floating point data type
 // double or float
-//#define DTYPE float
+#define DTYPE float
 
 //Parameters
 
@@ -15,18 +15,18 @@
 #define BLOCKSIZE 256
 
 //Number of data dimensions
-//#define NDIM 2
+#define NDIM 2
 
 //Number of datapoints
-//#define NPOINT 1864620
+#define NPOINT 1864620
 
 //Number of clusters
-//#define NCLUST 200
+#define NCLUST 200
 
 //Number of groups (NCLUST / 10 for CPU) (20 for GPU) (1 for Super Simplified Implementations)
-//#define NGROUP 20
+#define NGROUP 20
 
-//#define NGROUPCPU 20
+#define NGROUPCPU 20
 
 //Number of kmeans iterations
 #define MAXITER 200
@@ -35,10 +35,10 @@
 #define SEED 73
 
 // number of cpu threads
-//#define NTHREAD 16
+#define NTHREAD 16
 
 // number of executions for averaging time
-//#define NRUNS 1
+#define NRUNS 1
 
 
 // Struct Data Types //
