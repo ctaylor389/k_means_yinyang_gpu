@@ -10,7 +10,7 @@ DTYPE calcDisCPU(vector vec1,
 
 	for(index = 0; index < numDim; index++)
 	{
-		total += pow((vec2.feat[index] - vec1.feat[index]), 2);
+		total += (vec2.feat[index] - vec1.feat[index]) * (vec2.feat[index] - vec1.feat[index]);
 	}
 
 
