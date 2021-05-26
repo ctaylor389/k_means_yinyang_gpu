@@ -1,4 +1,4 @@
-# k_means_yinyang_gpu
+# Yinyang K-Means in Cuda
 Yinyang kmeans algorithm implemented in CUDA
 
 ## Contents
