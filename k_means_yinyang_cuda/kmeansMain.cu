@@ -83,7 +83,7 @@ int main(int argc, char *argv[])
   
   int numPnt;
   int numCent;
-  int numGrp;
+  int numGrp = 20;
   int numDim;
   int numThread = 1;
   int maxIter = 1000;
@@ -137,6 +137,8 @@ int main(int argc, char *argv[])
     printf("Error: Cannot recognize given number of clusters. Exiting...\n"); 
     return 1;
   }
+  if(numGrp > numCent)
+  numGrp = numCent;
   
   if(impCode == FULLCPU || impCode == SIMPLECPU || impCode == SUPERCPU || impCode == LLOYDCPU){
     if(numCent < 10)
@@ -152,7 +154,7 @@ int main(int argc, char *argv[])
     if(!strcmp(argv[i],"-t") && i+1 < argc)
     {
       numGrp = atoi(argv[i+1]);
-      if(numGrp <= numCent)
+      if(numGrp > numCent)
       {
         printf("Error: Given number of groups invalid. Exiting...\n");
         return 1;

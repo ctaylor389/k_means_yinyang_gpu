@@ -137,7 +137,7 @@ double startFullOnCPU(PointInfo *pointInfo,
   updateCentroids(pointInfo, centInfo, pointData, centData, 
                   maxDriftArr, numPnt, numCent, numGrp, numDim, numThread);
   double endTime = omp_get_wtime();
-  *ranIter = index + 1;
+  *ranIter = index;
 
   return endTime - startTime;
 }
@@ -275,7 +275,7 @@ double startSimpleOnCPU(PointInfo *pointInfo,
   updateCentroids(pointInfo, centInfo, pointData, centData, 
                   maxDriftArr, numPnt, numCent, numGrp, numDim, numThread);
   double endTime = omp_get_wtime();
-  *ranIter = index + 1;
+  *ranIter = index;
 
   return endTime - startTime;
 }
@@ -389,7 +389,7 @@ double startSuperOnCPU(PointInfo *pointInfo,
   updateCentroids(pointInfo, centInfo, pointData, centData, 
                   &maxDrift, numPnt, numCent, 1, numDim, numThread);
   double endTime = omp_get_wtime();
-  *ranIter = index + 1;
+  *ranIter = index;
 
   return endTime - startTime;
 

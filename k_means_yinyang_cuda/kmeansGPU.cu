@@ -168,7 +168,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   // and the final centroid positions
   gpuErrchk(cudaMemcpy(centData,devCentData,sizeof(DTYPE)*numDim*numCent,cudaMemcpyDeviceToHost));
 
-  *ranIter = index + 1;
+  *ranIter = index;
 
   // clean up, return
   cudaFree(devPointInfo);
@@ -344,7 +344,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   gpuErrchk(cudaMemcpy(centData,devCentData,
                        sizeof(DTYPE)*numDim*numCent,cudaMemcpyDeviceToHost));
 
-  *ranIter = index + 1;
+  *ranIter = index;
 
   // clean up, return
   cudaFree(devPointInfo);
@@ -522,7 +522,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   gpuErrchk(cudaMemcpy(centData, devCentData,
                          sizeof(DTYPE)*numDim*numCent, cudaMemcpyDeviceToHost));
 
-  *ranIter = index + 1;
+  *ranIter = index;
 
   // clean up, return
   cudaFree(devPointInfo);
