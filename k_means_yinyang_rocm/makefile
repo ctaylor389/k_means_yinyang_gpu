@@ -3,7 +3,7 @@
 #need to do a make clean first before executing the program if modifying the parameters file
 
 
-CODEOBJECTS = GPU.o kernel.o kmeansCPU.o kmeansUtils.o main.o
+CODEOBJECTS = kmeansGPU.o kmeansKernel.o kmeansCPU.o kmeansUtil.o kmeansTest.o kmeansMain.o
 CC = hipcc
 EXECUTABLE = kmeans
 
@@ -21,20 +21,23 @@ all: $(EXECUTABLE)
 
 
 
-kernel.o: kernel.cu params.h
-	$(CC) $(CFLAGS) $(FLAGS) kernel.cu 	
+kmeansKernel.o: kmeansKernel.cpp params.h
+	$(CC) $(CFLAGS) $(FLAGS) kmeansKernel.cpp 	
 
-GPU.o: GPU.cu params.h
-	$(CC) $(CFLAGS) $(FLAGS) GPU.cu
+kmeansGPU.o: kmeansGPU.cpp params.h
+	$(CC) $(CFLAGS) $(FLAGS) kmeansGPU.cpp
 
-kmeansCPU.o: kmeansCPU.cu kmeansCPU.h 	
-	$(CC) $(CFLAGS) $(FLAGS) kmeansCPU.cu
+kmeansCPU.o: kmeansCPU.cpp kmeansCPU.h 	
+	$(CC) $(CFLAGS) $(FLAGS) kmeansCPU.cpp
 
-kmeansUtils.o: kmeansUtils.cu kmeansUtils.h 
-	$(CC) $(CFLAGS) $(FLAGS) kmeansUtils.cu
+kmeansUtil.o: kmeansUtil.cpp kmeansUtil.h 
+	$(CC) $(CFLAGS) $(FLAGS) kmeansUtil.cpp
 
-main.o: main.cu params.h kmeansCPU.h kmeansUtils.h GPU.h
-	$(CC) $(CFLAGS) $(FLAGS) main.cu 
+kmeansTest.o: kmeansTest.cpp kmeansTest.h params.h kmeansCPU.h kmeansUtil.h kmeansGPU.h
+	$(CC) $(CFLAGS) $(FLAGS) kmeansTest.cpp
+
+kmeansMain.o: kmeansMain.cpp params.h kmeansCPU.h kmeansUtil.h kmeansGPU.h kmeansTest.h
+	$(CC) $(CFLAGS) $(FLAGS) kmeansMain.cpp
 
 $(EXECUTABLE): $(CODEOBJECTS)
 	$(CC) $(FLAGS) $^ -o $@
