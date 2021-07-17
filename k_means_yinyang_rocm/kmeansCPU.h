@@ -5,96 +5,103 @@
 #include <stdlib.h>
 #include "omp.h"
 #include "params.h"
-#include "kmeansUtils.h"
+#include "kmeansUtil.h"
 
-int startFullOnCPU(point *dataset,
-				   cent *centroidDataset,
-				   double *startTime,
-				   double *endTime,
-				   unsigned int *ranIter);
+double startFullOnCPU(PointInfo *pointInfo, 
+                      CentInfo *centInfo, 
+                      DTYPE *pointData, 
+                      DTYPE *centData,
+                      const int numPnt,
+                      const int numCent,
+                      const int numGrp, 
+                      const int numDim,
+                      const int numThread, 
+                      const int maxIter, 
+                      unsigned int *ranIter);
 
-int startSimpleOnCPU(point *dataset,
-					 cent *centroidDataset,
-				  	 double *startTime,  
-				  	 double *endTime,
-				  	 unsigned int *ranIter);
+double startSimpleOnCPU(PointInfo *pointInfo, 
+                        CentInfo *centInfo, 
+                        DTYPE *pointData, 
+                        DTYPE *centData,
+                        const int numPnt,
+                        const int numCent,
+                        const int numGrp, 
+                        const int numDim,
+                        const int numThread,
+                        const int maxIter, 
+                        unsigned int *ranIter);
 
-int startSuperOnCPU(point *dataset,
-					cent *centroidDataset,
-				  	double *startTime,
-				  	double *endTime,
-				  	unsigned int *ranIter);
+double startSuperOnCPU(PointInfo *pointInfo, 
+                       CentInfo *centInfo, 
+                       DTYPE *pointData,
+                       DTYPE *centData, 
+                       const int numPnt, 
+                       const int numCent, 
+                       const int numDim,
+                       const int numThread, 
+                       const int maxIter, 
+                       unsigned int *ranIter);
 
-int startLloydOnCPU(point *dataset,
-					cent *centroidDataset,
-				  	double *startTime,  
-				  	double *endTime,
-				  	unsigned int *ranIter);
+double startLloydOnCPU(PointInfo *pointInfo, 
+                       CentInfo *centInfo, 
+                       DTYPE *pointData, 
+                       DTYPE *centData, 
+                       const int numPnt, 
+                       const int numCent, 
+                       const int numDim,
+                       const int numThread,
+                       const int maxIter, 
+                       unsigned int *ranIter);
 
-unsigned int checkConverge(point *dataset);
+unsigned int checkConverge(PointInfo *pointInfo, 
+                           const int numPnt);
 
-void updateCentroids(point *dataset,
-					 cent *centroidDataset,
-					 DTYPE *maxDriftArr);
+void pointCalcsFullCPU(PointInfo *pointInfoPtr,
+                       CentInfo *centInfo,
+                       DTYPE *pointDataPtr,
+                       DTYPE *pointLwrPtr,
+                       DTYPE *centData,
+                       DTYPE *maxDriftArr,
+                       unsigned int *groupArr,
+                       const int numPnt,
+                       const int numCent,
+                       const int numGrp,
+                       const int numDim);
 
-void pointCalcsSimple(point *pointPtr, 
-				      int *groupArr,
-                      DTYPE *driftArr, 
-                      cent *centroidDataset);
-				
-void pointCalcsFull(point *pointPtr, 
-				    int *groupArr,
-				    DTYPE *driftArr, 
-				    cent *centroidDataset);
+void pointCalcsSimpleCPU(PointInfo *pointInfoPtr,
+                         CentInfo *centInfo,
+                         DTYPE *pointDataPtr,
+                         DTYPE *pointLwrPtr,
+                         DTYPE *centData,
+                         DTYPE *maxDriftArr,
+                         unsigned int *groupArr,
+                         const int numPnt,
+                         const int numCent,
+                         const int numGrp,
+                         const int numDim);
 
-void pointCalcsFullAlt(point *pointPtr, 
-				       int *groupArr,
-				       DTYPE *driftArr, 
-				       cent *centroidDataset);
+void initPoints(PointInfo *pointInfo,
+                CentInfo *centInfo, 
+                DTYPE *pointData, 
+                DTYPE *pointLwrs, 
+                DTYPE *centData, 
+                const int numPnt, 
+                const int numCent, 
+                const int numGrp, 
+                const int numDim, 
+                const int numThread);
 
-void initPoints(point *dataset, 
-				cent *centroidDataset);
+void updateCentroids(PointInfo *pointInfo, 
+                     CentInfo *centInfo, 
+                     DTYPE *pointData,
+                     DTYPE *centData, 
+                     DTYPE *maxDriftArr,
+                     const int numPnt, 
+                     const int numCent, 
+                     const int numGrp, 
+                     const int numDim, 
+                     const int numThread);
 
-// overloads for counting distance calculations
 
-int startFullOnCPU(point *dataset,
-				   cent *centroidDataset,
-				   unsigned long long int *distCalcCount,
-				   double *startTime,
-				   double *endTime,
-				   unsigned int *ranIter);
-
-int startSimpleOnCPU(point *dataset,
-					 cent *centroidDataset,
-					 unsigned long long int *distCalcCount,
-				  	 double *startTime,  
-				  	 double *endTime,
-				  	 unsigned int *ranIter);
-
-int startSuperOnCPU(point *dataset,
-					cent *centroidDataset,
-					unsigned long long int *distCalcCount,
-				  	double *startTime,
-				  	double *endTime,
-				  	unsigned int *ranIter);
-
-unsigned long long int pointCalcsSimpleCount(point *pointPtr, 
-				                             int *groupArr,
-				                             DTYPE *driftArr, 
-				                             cent *centroidDataset);
-				
-unsigned long long int pointCalcsFullCount(point *pointPtr, 
-				                           int *groupArr,
-				                           DTYPE *driftArr, 
-				                           cent *centroidDataset);
-
-unsigned long long int pointCalcsFullAltCount(point *pointPtr,
-				                              int *groupArr,
-				                              DTYPE *driftArr,
-				                              cent *centroidDataset);
-
-void initPoints(point *dataset, 
-				cent *centroidDataset,
-				unsigned long long int *distCalcCount);
 
 #endif
