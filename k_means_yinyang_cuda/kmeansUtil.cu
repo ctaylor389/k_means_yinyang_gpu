@@ -162,7 +162,6 @@ int generateRandCent(CentInfo *centInfo,
 	unsigned int centIndex, dimIndex;
 	DTYPE newFeat;
 
-	char writeString[5000];
 
 	FILE *fp = fopen(filename, "w");
 	if(!fp)
@@ -172,19 +171,16 @@ int generateRandCent(CentInfo *centInfo,
 
 	for(centIndex = 0; centIndex < numCent; centIndex++)
 	{
-		sprintf(writeString, " ");
 		for(dimIndex = 0; dimIndex < numDim; dimIndex++)
 		{
 			newFeat = 2.0*((DTYPE)(rand()) / RAND_MAX);
 			centData[(centIndex * numDim) + dimIndex] = newFeat;
-			if(dimIndex != 0 && dimIndex != numDim)
-			{
-				sprintf(writeString, "%s,", writeString);
-			}
-			sprintf(writeString, "%s%f", writeString, newFeat);
+			
+			fprintf(fp, "%f", newFeat);
+      if(dimIndex != numDim - 1)
+			fprintf(fp, ",");
 		}
-		sprintf(writeString, "%s\n", writeString);
-		fputs(writeString, fp);
+		fprintf(fp, "\n");
 		centInfo[centIndex].groupNum = -1;
 		centInfo[centIndex].drift = 0.0;
 		centInfo[centIndex].count = 0;
@@ -310,7 +306,6 @@ int writeResults(PointInfo *pointInfo,
 				 const int numPnt,
 				 const char *filename)
 {
-	char writeString[100];
 	FILE *fp;
 	int i;
 
@@ -318,8 +313,7 @@ int writeResults(PointInfo *pointInfo,
 
 	for(i = 0; i < numPnt; i++)
 	{
-		sprintf(writeString, "%d\n", pointInfo[i].centroidIndex);
-		fputs(writeString, fp);
+		fprintf(fp, "%d\n", pointInfo[i].centroidIndex);
 	}
 	fclose(fp);
 	return 0;
@@ -330,7 +324,6 @@ int writeData(DTYPE *data,
 			  const int numDim,
 			  const char *filename)
 {
-	char writeString[2000];
 	FILE *fp;
 	int i, j;
 
@@ -340,18 +333,11 @@ int writeData(DTYPE *data,
 	{
 		for(j = 0; j < numDim; j++)
 		{
-			if(j != 0)
-			{
-				sprintf(writeString, "%s,%f", writeString, data[(i * numDim) + j]);
-			}
-			else
-			{
-				sprintf(writeString, "%f", data[(i * numDim) + j]);
-			}
+			fprintf(fp, "%f", data[(i * numDim) + j]);
+      if(j != numDim - 1)
+      fprintf(fp, ",");
 		}
-
-		sprintf(writeString, "%s\n", writeString);
-		fputs(writeString, fp);
+		fprintf(fp, "\n");
 	}
 	fclose(fp);
 	return 0;
