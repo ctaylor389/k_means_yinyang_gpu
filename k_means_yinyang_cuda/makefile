@@ -3,7 +3,7 @@
 #need to do a make clean first before executing the program if modifying the parameters file
 
 
-CUDAOBJECTS = GPU.o kernel.o kmeansCPU.o kmeansUtils.o main.o
+CUDAOBJECTS = kmeansKernel.o kmeansGPU.o kmeansCPU.o kmeansUtil.o kmeansTest.o  kmeansMain.o
 CC = nvcc
 EXECUTABLE = kmeans
 
@@ -21,20 +21,23 @@ all: $(EXECUTABLE)
 
 
 
-kernel.o: kernel.cu params.h
-	$(CC) $(CFLAGS) $(FLAGS) $(NTHREADS) $(SEARCHMODE) $(PARAMS) kernel.cu 		
+kmeansKernel.o: kmeansKernel.cu params.h
+	$(CC) $(CFLAGS) $(FLAGS) $(NTHREADS) $(SEARCHMODE) $(PARAMS) kmeansKernel.cu 		
 
-GPU.o: GPU.cu params.h
-	$(CC) $(CFLAGS) $(FLAGS) $(NTHREADS) $(SEARCHMODE) $(PARAMS) GPU.cu
+kmeansGPU.o: kmeansGPU.cu params.h
+	$(CC) $(CFLAGS) $(FLAGS) $(NTHREADS) $(SEARCHMODE) $(PARAMS) kmeansGPU.cu
 
 kmeansCPU.o: kmeansCPU.cu kmeansCPU.h 	
 	$(CC) $(CFLAGS) $(FLAGS) $(NTHREADS) $(SEARCHMODE) $(PARAMS) kmeansCPU.cu
 
-kmeansUtils.o: kmeansUtils.cu kmeansUtils.h 
-	$(CC) $(CFLAGS) $(FLAGS) $(NTHREADS) $(SEARCHMODE) $(PARAMS) kmeansUtils.cu
+kmeansUtil.o: kmeansUtil.cu kmeansUtil.h 
+	$(CC) $(CFLAGS) $(FLAGS) $(NTHREADS) $(SEARCHMODE) $(PARAMS) kmeansUtil.cu
 
-main.o: main.cu params.h kmeansCPU.h kmeansUtils.h GPU.h
-	$(CC) $(CFLAGS) $(FLAGS) $(NTHREADS) $(SEARCHMODE) $(PARAMS) main.cu 
+kmeansTest.o: kmeansTest.cu kmeansTest.h params.h kmeansCPU.h kmeansUtil.h kmeansGPU.h
+	$(CC) $(CFLAGS) $(FLAGS) $(NTHREADS) $(SEARCHMODE) $(PARAMS) kmeansTest.cu 
+
+kmeansMain.o: kmeansMain.cu params.h kmeansCPU.h kmeansUtil.h kmeansGPU.h kmeansTest.h
+	$(CC) $(CFLAGS) $(FLAGS) $(NTHREADS) $(SEARCHMODE) $(PARAMS) kmeansMain.cu 
 
 $(EXECUTABLE): $(CUDAOBJECTS)
 	$(CC) $(FLAGS) $^ -o $@

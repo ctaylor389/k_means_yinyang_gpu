@@ -5,211 +5,141 @@
 /////////////////////////////////
 // CPU k-means implementations //
 /////////////////////////////////
-int startLloydOnCPU(point *dataset,
-                     cent *centroidDataset,
-                     double *startTime,
-                     double *endTime,
-                     unsigned int *ranIter)
+
+
+double startFullOnCPU(PointInfo *pointInfo, 
+                    CentInfo *centInfo, 
+                    DTYPE *pointData, 
+                    DTYPE *centData,
+                    const int numPnt,
+                    const int numCent,
+                    const int numGrp, 
+                    const int numDim,
+                    const int numThread, 
+                    const int maxIter, 
+                    unsigned int *ranIter)
 {
+  double startTime = omp_get_wtime();
 
-    *startTime = omp_get_wtime();
-    
-    unsigned int pntIndex, clstIndex, dimIndex;
-    unsigned int index = 0;
-    unsigned int conFlag = 0;
+  // index variables
+  unsigned int pntIndex, grpIndex;
+  unsigned int index = 1;
+  unsigned int conFlag = 0;
 
+  // array to contain the maximum drift of each group of centroids
+  // note: shared amongst all points
+  DTYPE *maxDriftArr = (DTYPE *)malloc(sizeof(DTYPE) * numGrp);
+  
+  // array of all the points lower bounds
+  DTYPE *pointLwrs = (DTYPE *)malloc(sizeof(DTYPE) * numPnt * numGrp);
+  
+  // initiatilize to INFINITY
+  for(grpIndex = 0; grpIndex < numPnt * numGrp; grpIndex++)
+  {
+    pointLwrs[grpIndex] = INFINITY;
+  }
 
-    omp_set_num_threads(NTHREAD);
+  // array to contain integer flags which mark which groups need to be checked
+  // for a potential new centroid
+  // note: unique to each point
+  unsigned int *groupLclArr = (unsigned int *)malloc(sizeof(unsigned int)*numPnt*numGrp);
 
-    DTYPE currMin, currDis;
+  omp_set_num_threads(numThread);
 
-    // start standard kmeans algorithm for MAXITER iterations
-    while(!conFlag && index < MAXITER)
+  // the minimum of all the lower bounds for a single point
+  DTYPE tmpGlobLwr = INFINITY;
+  
+  // cluster the centroids into NGROUPCPU groups
+  groupCent(centInfo, centData, numCent, numGrp, numDim);
+
+  // run one iteration of standard kmeans for initial centroid assignments
+  initPoints(pointInfo, centInfo, pointData, pointLwrs, 
+             centData, numPnt, numCent, numGrp, numDim, numThread);
+
+  // master loop
+  while(!conFlag && index < maxIter)
+  {
+    // clear drift array each new iteration
+    for(grpIndex = 0; grpIndex < numGrp; grpIndex++)
     {
-        currMin = INFINITY;
-
-        #pragma omp parallel private(pntIndex, clstIndex, currDis, currMin) shared(dataset, centroidDataset)
-        {
-            #pragma omp for nowait schedule(static)
-            for(pntIndex = 0; pntIndex < NPOINT; pntIndex++)
-            {
-                dataset[pntIndex].oldCentroid = dataset[pntIndex].centroidIndex;
-                for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-                {
-                    currDis = calcDisCPU(dataset[pntIndex].vec, 
-                                         centroidDataset[clstIndex].vec,
-                                         NDIM);
-                    if(currDis < currMin)
-                    {
-                        dataset[pntIndex].centroidIndex = clstIndex;
-                        currMin = currDis;
-                    }
-                }
-                currMin = INFINITY;
-            }
-        }
-
-        // clear centroids features
-        for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-        {
-            for(dimIndex = 0; dimIndex < NDIM; dimIndex++)
-            {
-                centroidDataset[clstIndex].vec.feat[dimIndex] = 0.0;
-            }
-            centroidDataset[clstIndex].count = 0;
-        }
-        // sum all assigned point's features
-        #pragma omp parallel private(pntIndex, dimIndex) shared(dataset, centroidDataset)
-        {
-            #pragma omp for nowait schedule(static)
-            for(pntIndex = 0; pntIndex < NPOINT; pntIndex++)
-            {
-                #pragma omp atomic
-                centroidDataset[dataset[pntIndex].centroidIndex].count++;
-
-                for(dimIndex = 0; dimIndex < NDIM; dimIndex++)
-                {
-                    #pragma omp atomic
-                    centroidDataset[dataset[pntIndex].centroidIndex].vec.feat[dimIndex] +=
-                        dataset[pntIndex].vec.feat[dimIndex];
-                }
-            }
-        }
-        // take the average of each feature to get new centroid features
-        for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-        {
-            for(dimIndex = 0; dimIndex < NDIM; dimIndex++)
-            {
-                if(centroidDataset[clstIndex].count > 0)
-                {
-                    centroidDataset[clstIndex].vec.feat[dimIndex] /= 
-                                        centroidDataset[clstIndex].count;
-                }
-                // otherwise, centroid remains the same
-            }
-        }
-        index++;
-        conFlag = checkConverge(dataset);
+      maxDriftArr[grpIndex] = 0.0;
     }
 
-    *endTime = omp_get_wtime();
-    *ranIter = index;
+    // update centers via optimised update method
+    updateCentroids(pointInfo, centInfo, pointData, centData, 
+                    maxDriftArr, numPnt, numCent, numGrp, numDim, numThread);
 
-    //printf("iterations: %d\n", index);
-    return 0;
-}
-
-int startFullOnCPU(point *dataset,
-                   cent *centroidDataset,
-                   double *startTime,
-                   double *endTime,
-                   unsigned int *ranIter)
-{
-    *startTime = omp_get_wtime();
-
-    // index variables
-    unsigned int pntIndex, grpIndex;
-    unsigned int index = 0;
-    unsigned int conFlag = 0;
-
-    // array to contain the maximum drift of each group of centroids
-    // note: shared amongst all points
-    DTYPE driftArr[NGROUPCPU];
-
-    // array to contain integer flags which mark which groups need to be checked
-    // for a potential new centroid
-    // note: unique to each point
-    int groupLclArr[NGROUPCPU];
-
-    omp_set_num_threads(NTHREAD);
-
-    // the minimum of all the lower bounds for a single point
-    DTYPE tmpGlobLwr = INFINITY;
-    
-    // cluster the centroids into NGROUPCPU groups
-    groupCent(centroidDataset, NCLUST, NGROUPCPU, NDIM);
-
-    // run one iteration of standard kmeans for initial centroid assignments
-    initPoints(dataset, centroidDataset);
-
-    // master loop
-    while(!conFlag && index < MAXITER)
+    // filtering done in parallel
+    #pragma omp parallel \
+    private(pntIndex, grpIndex, tmpGlobLwr) \
+    shared(pointInfo, centInfo, pointData, centData, maxDriftArr, groupLclArr)
     {
-        // clear drift array each new iteration
-        for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-        {
-            driftArr[grpIndex] = 0.0;
-        }
-    
-        // update centers via optimised update method
-        updateCentroids(dataset, centroidDataset, driftArr);
+      #pragma omp for schedule(static)
+      for(pntIndex = 0; pntIndex < numPnt; pntIndex++)
+      {
+        // reset old centroid before possibly finding a new one
+        pointInfo[pntIndex].oldCentroid = pointInfo[pntIndex].centroidIndex;
 
-        // filtering done in parallel
-        #pragma omp parallel private(pntIndex, grpIndex, tmpGlobLwr, groupLclArr) shared(dataset, centroidDataset, driftArr)
+        tmpGlobLwr = INFINITY;
+        
+        // update upper bound
+          // ub = ub + centroid's drift
+        pointInfo[pntIndex].uprBound +=
+          centInfo[pointInfo[pntIndex].centroidIndex].drift;
+        
+        // update group lower bounds
+          // lb = lb - maxGroupDrift
+        for(grpIndex = 0; grpIndex < numGrp; grpIndex++)
         {
-            #pragma omp for schedule(static)
-            for(pntIndex = 0; pntIndex < NPOINT; pntIndex++)
+          pointLwrs[(pntIndex * numGrp) + grpIndex] -= maxDriftArr[grpIndex];
+
+          if(pointLwrs[(pntIndex * numGrp) + grpIndex] < tmpGlobLwr)
+          {
+            // minimum lower bound
+            tmpGlobLwr = pointLwrs[(pntIndex * numGrp) + grpIndex];
+          }
+        }
+
+        // global filtering
+        // if global lowerbound >= upper bound
+        if(tmpGlobLwr < pointInfo[pntIndex].uprBound)
+        {
+          // tighten upperbound ub = d(x, b(x))
+          pointInfo[pntIndex].uprBound = 
+            calcDisCPU(&pointData[pntIndex * numDim],
+                       &centData[pointInfo[pntIndex].centroidIndex * numDim],
+                       numDim);
+            
+          // check condition again
+          if(tmpGlobLwr < pointInfo[pntIndex].uprBound)
+          {
+            // group filtering
+            for(grpIndex = 0; grpIndex < numGrp; grpIndex++)
             {
-                // reset old centroid before possibly finding a new one
-                dataset[pntIndex].oldCentroid = dataset[pntIndex].centroidIndex;
-
-                tmpGlobLwr = INFINITY;
-                
-                // update upper bound
-                    // ub = ub + centroid's drift
-                dataset[pntIndex].uprBound +=
-                    centroidDataset[dataset[pntIndex].centroidIndex].drift;
-                
-                // update group lower bounds
-                    // lb = lb - maxGroupDrift
-                for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-                {
-                    dataset[pntIndex].lwrBoundArr[grpIndex] -= driftArr[grpIndex];
-
-                    if(dataset[pntIndex].lwrBoundArr[grpIndex] < tmpGlobLwr)
-                    {
-                        // minimum lower bound
-                        tmpGlobLwr = dataset[pntIndex].lwrBoundArr[grpIndex];
-                    }
-                }
-
-                // global filtering
-                // if global lowerbound >= upper bound
-                if(tmpGlobLwr < dataset[pntIndex].uprBound)
-                {
-                    // tighten upperbound ub = d(x, b(x))
-                    dataset[pntIndex].uprBound = 
-                        calcDisCPU(dataset[pntIndex].vec,
-                                   centroidDataset[dataset[pntIndex].centroidIndex].vec,
-                                   NDIM);
-
-                    // check condition again
-                    if(tmpGlobLwr < dataset[pntIndex].uprBound)
-                    {
-                        // group filtering
-                        for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-                        {
-                            // mark groups that need to be checked
-                            if(dataset[pntIndex].lwrBoundArr[grpIndex] < dataset[pntIndex].uprBound)
-                            groupLclArr[grpIndex] = 1;
-                            else
-                            groupLclArr[grpIndex] = 0;
-                        }
-
-                        // pass group array and point to go execute distance calculations
-                        pointCalcsFull(&dataset[pntIndex], groupLclArr, 
-                                                driftArr, centroidDataset);
-                    }
-                }
+                // mark groups that need to be checked
+              if(pointLwrs[(pntIndex * numGrp) + grpIndex] < pointInfo[pntIndex].uprBound)
+              groupLclArr[(pntIndex * numGrp) + grpIndex] = 1;
+              else
+              groupLclArr[(pntIndex * numGrp) + grpIndex] = 0;
             }
+            // pass group array and point to go execute distance calculations
+            pointCalcsFullCPU(&pointInfo[pntIndex], centInfo, 
+                              &pointData[pntIndex*numDim], &pointLwrs[pntIndex*numGrp],
+                              centData, maxDriftArr, &groupLclArr[pntIndex*numGrp], 
+                              numPnt, numCent, numGrp, numDim);
+          }
         }
-        index++;
-        conFlag = checkConverge(dataset);
+      }
     }
-    *endTime = omp_get_wtime();
-    *ranIter = index + 1;
+    index++;
+    conFlag = checkConverge(pointInfo, numPnt);
+  }
+  updateCentroids(pointInfo, centInfo, pointData, centData, 
+                  maxDriftArr, numPnt, numCent, numGrp, numDim, numThread);
+  double endTime = omp_get_wtime();
+  *ranIter = index + 1;
 
-    return 0;
+  return endTime - startTime;
 }
 
 
@@ -218,413 +148,492 @@ int startFullOnCPU(point *dataset,
 CPU implementation of the simplified Yinyang algorithm
 given only a file name with the points and a start and end time
 */
-int startSimpleOnCPU(point *dataset,
-                     cent *centroidDataset,
-                     double *startTime,
-                     double *endTime,
+double startSimpleOnCPU(PointInfo *pointInfo, 
+                      CentInfo *centInfo, 
+                      DTYPE *pointData, 
+                      DTYPE *centData,
+                      const int numPnt,
+                      const int numCent,
+                      const int numGrp, 
+                      const int numDim,
+                      const int numThread,
+                      const int maxIter, 
+                      unsigned int *ranIter)
+{
+  double startTime = omp_get_wtime();
+
+  // index variables
+  unsigned int pntIndex, grpIndex;
+  unsigned int index = 1;
+  unsigned int conFlag = 0;
+
+  // array to contain the maximum drift of each group of centroids
+  // note: shared amongst all points
+  DTYPE *maxDriftArr = (DTYPE *)malloc(sizeof(DTYPE) * numGrp);
+  
+  // array of all the points lower bounds
+  DTYPE *pointLwrs = (DTYPE *)malloc(sizeof(DTYPE) * numPnt * numGrp);
+  
+  // initiatilize to INFINITY
+  for(grpIndex = 0; grpIndex < numPnt * numGrp; grpIndex++)
+  {
+    pointLwrs[grpIndex] = INFINITY;
+  }
+
+  // array to contain integer flags which mark which groups need to be checked
+  // for a potential new centroid
+  // note: unique to each point
+  unsigned int *groupLclArr = (unsigned int *)malloc(sizeof(unsigned int) * numPnt * numGrp);
+
+  omp_set_num_threads(numThread);
+
+  // the minimum of all the lower bounds for a single point
+  DTYPE tmpGlobLwr = INFINITY;
+  
+  // cluster the centroids into NGROUPCPU groups
+  groupCent(centInfo, centData, numCent, numGrp, numDim);
+
+  // run one iteration of standard kmeans for initial centroid assignments
+  initPoints(pointInfo, centInfo, pointData, pointLwrs, 
+             centData, numPnt, numCent, numGrp, numDim, numThread);
+  // master loop
+  while(!conFlag && index < maxIter)
+  {
+    // clear drift array each new iteration
+    for(grpIndex = 0; grpIndex < numGrp; grpIndex++)
+    {
+      maxDriftArr[grpIndex] = 0.0;
+    }
+    // update centers via optimised update method
+    updateCentroids(pointInfo, centInfo, pointData, centData, 
+                    maxDriftArr, numPnt, numCent, numGrp, numDim, numThread);
+    // filtering done in parallel
+    #pragma omp parallel \
+    private(pntIndex, grpIndex, tmpGlobLwr) \
+    shared(pointInfo, centInfo, pointData, centData, maxDriftArr, groupLclArr)
+    {
+      #pragma omp for schedule(static)
+      for(pntIndex = 0; pntIndex < numPnt; pntIndex++)
+      {
+        // reset old centroid before possibly finding a new one
+        pointInfo[pntIndex].oldCentroid = pointInfo[pntIndex].centroidIndex;
+
+        tmpGlobLwr = INFINITY;
+
+        // update upper bound
+            // ub = ub + centroid's drift
+        pointInfo[pntIndex].uprBound +=
+          centInfo[pointInfo[pntIndex].centroidIndex].drift;
+        
+        // update group lower bounds
+            // lb = lb - maxGroupDrift
+        for(grpIndex = 0; grpIndex < numGrp; grpIndex++)
+        {
+          pointLwrs[(pntIndex * numGrp) + grpIndex] -= maxDriftArr[grpIndex];
+
+          if(pointLwrs[(pntIndex * numGrp) + grpIndex] < tmpGlobLwr)
+          {
+              // minimum lower bound
+              tmpGlobLwr = pointLwrs[(pntIndex * numGrp) + grpIndex];
+          }
+        }
+
+        // global filtering
+        // if global lowerbound >= upper bound
+        if(tmpGlobLwr < pointInfo[pntIndex].uprBound)
+        {
+          // tighten upperbound ub = d(x, b(x))
+          pointInfo[pntIndex].uprBound = 
+              calcDisCPU(&pointData[pntIndex * numDim],
+                         &centData[pointInfo[pntIndex].centroidIndex * numDim],
+                         numDim);
+          // check condition again
+          if(tmpGlobLwr < pointInfo[pntIndex].uprBound)
+          {
+            // group filtering
+            for(grpIndex = 0; grpIndex < numGrp; grpIndex++)
+            {
+              // mark groups that need to be checked
+              if(pointLwrs[(pntIndex * numGrp) + grpIndex] < pointInfo[pntIndex].uprBound)
+              groupLclArr[(pntIndex * numGrp) + grpIndex] = 1;
+              else
+              groupLclArr[(pntIndex * numGrp) + grpIndex] = 0;
+            }
+            
+            // pass group array and point to go execute distance calculations
+            pointCalcsSimpleCPU(&pointInfo[pntIndex], centInfo, 
+                                &pointData[pntIndex*numDim], &pointLwrs[pntIndex*numGrp],
+                                centData, maxDriftArr, &groupLclArr[pntIndex * numGrp], 
+                                numPnt, numCent, numGrp, numDim);
+          }
+        }
+      }
+    }
+    index++;
+    conFlag = checkConverge(pointInfo, numPnt);
+  }
+  updateCentroids(pointInfo, centInfo, pointData, centData, 
+                  maxDriftArr, numPnt, numCent, numGrp, numDim, numThread);
+  double endTime = omp_get_wtime();
+  *ranIter = index + 1;
+
+  return endTime - startTime;
+}
+
+
+double startSuperOnCPU(PointInfo *pointInfo, 
+                     CentInfo *centInfo, 
+                     DTYPE *pointData,
+                     DTYPE *centData, 
+                     const int numPnt, 
+                     const int numCent, 
+                     const int numDim,
+                     const int numThread, 
+                     const int maxIter, 
                      unsigned int *ranIter)
 {
-    *startTime = omp_get_wtime();
+  double startTime = omp_get_wtime();
 
-    // index variables
-    unsigned int pntIndex, grpIndex;
-    unsigned int index = 0;
-    unsigned int conFlag = 0;
+  // index variables
+  unsigned int pntIndex, centIndex;
+  unsigned int index = 1;
 
-    // array to contain the maximum drift of each group of centroids
-    // note: shared amongst all points
-    DTYPE driftArr[NGROUPCPU];
+  DTYPE compDistance;
+  DTYPE maxDrift = 0.0;
 
-    // array to contain integer flags which mark which groups need to be checked
-    // for a potential new centroid
-    // note: unique to each point
-    int groupLclArr[NGROUPCPU];
+  unsigned int conFlag = 0;
 
-    omp_set_num_threads(NTHREAD);
+  omp_set_num_threads(numThread);
+
+  // place all centroids in one "group"
+  for(centIndex = 0; centIndex < numCent; centIndex++)
+  {
+    centInfo[centIndex].groupNum = 0;
+  }
+  
+  DTYPE *pointLwrs = (DTYPE *)malloc(sizeof(DTYPE) * numPnt);
+
+  // run one iteration of standard kmeans for initial centroid assignments
+  initPoints(pointInfo, centInfo, pointData, pointLwrs, 
+             centData, numPnt, numCent, 1, numDim, numThread);
+
+  // master loop
+  while(!conFlag && index < maxIter)
+  {
+    // update centers via optimised update method
+    updateCentroids(pointInfo, centInfo, pointData, centData, 
+                    &maxDrift, numPnt, numCent, 1, numDim, numThread);
     
-    // the minimum of all the lower bounds for a single point
-    DTYPE tmpGlobLwr = INFINITY;
-
-    // cluster the centroids int NGROUP groups
-    groupCent(centroidDataset, NCLUST, NGROUPCPU, NDIM);
-
-    // run one iteration of standard kmeans for initial centroid assignments
-    initPoints(dataset, centroidDataset);
-
-    // master loop
-    while(!conFlag && index < MAXITER)
+    // filtering done in parallel
+    #pragma omp parallel \
+    private(pntIndex, centIndex) \
+    shared(pointInfo, centInfo, pointData, centData, maxDrift)
     {
-        // clear drift array each new iteration
-        for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-        {
-            driftArr[grpIndex] = 0.0;
-        }
+      #pragma omp for schedule(static)
+      for(pntIndex = 0; pntIndex < numPnt; pntIndex++)
+      {
+        // reset old centroid before possibly finding a new one
+        pointInfo[pntIndex].oldCentroid = pointInfo[pntIndex].centroidIndex;
 
-        // update centers via optimised update method
-        updateCentroids(dataset, centroidDataset, driftArr);
+        // update upper bound
+          // ub = ub + centroid's drift
+        pointInfo[pntIndex].uprBound +=
+          centInfo[pointInfo[pntIndex].centroidIndex].drift;
 
-        // filtering done in parallel
-        #pragma omp parallel private(pntIndex, grpIndex, tmpGlobLwr, groupLclArr) shared(dataset, centroidDataset, driftArr)
+        // update lower bound
+        pointLwrs[pntIndex] -= maxDrift;
+
+        // global filtering
+        // if global lowerbound >= upper bound
+        if(pointLwrs[pntIndex] < pointInfo[pntIndex].uprBound)
         {
-            #pragma omp for schedule(static)
-            for(pntIndex = 0; pntIndex < NPOINT; pntIndex++)
+          // tighten upperbound ub = d(x, b(x))
+          pointInfo[pntIndex].uprBound = 
+            calcDisCPU(&pointData[pntIndex * numDim], 
+                       &centData[pointInfo[pntIndex].centroidIndex * numDim],
+                       numDim);
+
+          // check condition again
+          if(pointLwrs[pntIndex] < pointInfo[pntIndex].uprBound)
+          {
+            pointLwrs[pntIndex] = INFINITY;
+
+            // calculate distance between point and every cluster
+            for(centIndex = 0; centIndex < numCent; centIndex++)
             {
-                // reset old centroid before possibly finding a new one
-                dataset[pntIndex].oldCentroid = dataset[pntIndex].centroidIndex;
-                tmpGlobLwr = INFINITY;
+              // if clstIndex is the one already assigned, skip the calculation
+              if(centIndex == pointInfo[pntIndex].oldCentroid)
+              continue;
 
-                // update upper bound
-                    // ub = ub + centroid's drift
-                dataset[pntIndex].uprBound +=
-                        centroidDataset[dataset[pntIndex].centroidIndex].drift;
+              compDistance = calcDisCPU(&pointData[pntIndex * numDim],
+                                        &centData[centIndex * numDim], numDim);
 
-                // update group lower bounds and find min lower bound
-                    // lb = lb - maxGroupDrift
-                for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-                {
-                    dataset[pntIndex].lwrBoundArr[grpIndex] -= driftArr[grpIndex];
-
-                    if(dataset[pntIndex].lwrBoundArr[grpIndex] < tmpGlobLwr)
-                    {
-                        // minimum lower bound
-                        tmpGlobLwr = dataset[pntIndex].lwrBoundArr[grpIndex];
-                    }
-                }
-
-                // global filtering
-                // if global lowerbound >= upper bound
-                if(tmpGlobLwr < dataset[pntIndex].uprBound)
-                {
-                    // tighten upperbound ub = d(x, b(x))
-                    dataset[pntIndex].uprBound = 
-                        calcDisCPU(dataset[pntIndex].vec, 
-                            centroidDataset[dataset[pntIndex].centroidIndex].vec,
-                            NDIM);
-                    
-                    // check condition again
-                    if(tmpGlobLwr < dataset[pntIndex].uprBound)
-                    {
-                        // group filtering
-                        for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-                        {
-                            // mark groups that need to be checked
-                            if(dataset[pntIndex].lwrBoundArr[grpIndex] < dataset[pntIndex].uprBound)
-                            groupLclArr[grpIndex] = 1;
-                            else
-                            groupLclArr[grpIndex] = 0;
-                        }
-
-                        // pass group array and point to go execute distance calculations
-                        pointCalcsSimple(&dataset[pntIndex],
-                                         groupLclArr,
-                                         driftArr,
-                                         centroidDataset);
-                    }
-                }
+              if(compDistance < pointInfo[pntIndex].uprBound)
+              {
+                pointLwrs[pntIndex] = pointInfo[pntIndex].uprBound;
+                pointInfo[pntIndex].centroidIndex = centIndex;
+                pointInfo[pntIndex].uprBound = compDistance;
+              }
+              else if(compDistance < pointLwrs[pntIndex])
+              {
+                pointLwrs[pntIndex] = compDistance;
+              }
             }
-        }
-        index++;
-        conFlag = checkConverge(dataset);
+          }
+        }			
+      }
     }
-    
-    *endTime = omp_get_wtime();
-    *ranIter = index + 1;
+    index++;
+    conFlag = checkConverge(pointInfo, numPnt);
+  }
+  updateCentroids(pointInfo, centInfo, pointData, centData, 
+                  &maxDrift, numPnt, numCent, 1, numDim, numThread);
+  double endTime = omp_get_wtime();
+  *ranIter = index + 1;
 
-    return 0;
-}
-
-
-int startSuperOnCPU(point *dataset,
-                    cent *centroidDataset,
-                    double *startTime,
-                    double *endTime,
-                    unsigned int *ranIter)
-{
-    *startTime = omp_get_wtime();
-
-    // index variables
-    unsigned int pntIndex, clstIndex;
-    unsigned int index = 0;
-
-    DTYPE compDistance;
-    DTYPE maxDrift = 0.0;
-
-    unsigned int conFlag = 0;
-
-    omp_set_num_threads(NTHREAD);
-
-    // place all centroids in one "group"
-    for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-    {
-        centroidDataset[clstIndex].groupNum = 0;
-    }
-
-    // run one iteration of standard kmeans for initial centroid assignments
-    initPoints(dataset, centroidDataset);
-
-    // master loop
-    while(!conFlag && index < MAXITER)
-    {
-        // update centers via optimised update method
-        updateCentroids(dataset, centroidDataset, &maxDrift);
-        
-        // filtering done in parallel
-        #pragma omp parallel private(pntIndex, clstIndex, compDistance) shared(dataset, centroidDataset, maxDrift)
-        {
-            #pragma omp for schedule(static)
-            for(pntIndex = 0; pntIndex < NPOINT; pntIndex++)
-            {
-                // reset old centroid before possibly finding a new one
-                dataset[pntIndex].oldCentroid = dataset[pntIndex].centroidIndex;
-
-                // update upper bound
-                    // ub = ub + centroid's drift
-                dataset[pntIndex].uprBound +=
-                        centroidDataset[dataset[pntIndex].centroidIndex].drift;
-
-                // update lower bound
-                dataset[pntIndex].lwrBoundArr[0] -= maxDrift;
-
-                // global filtering
-                // if global lowerbound >= upper bound
-                if(dataset[pntIndex].lwrBoundArr[0] < dataset[pntIndex].uprBound)
-                {
-                    // tighten upperbound ub = d(x, b(x))
-                    dataset[pntIndex].uprBound = 
-                        calcDisCPU(dataset[pntIndex].vec, 
-                            centroidDataset[dataset[pntIndex].centroidIndex].vec,
-                            NDIM);
-
-                    // check condition again
-                    if(dataset[pntIndex].lwrBoundArr[0] < dataset[pntIndex].uprBound)
-                    {
-                        dataset[pntIndex].lwrBoundArr[0] = INFINITY;
-
-                        // calculate distance between point and every cluster
-                        for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-                        {
-                            // if clstIndex is the one already assigned, skip the calculation
-                            if(clstIndex == dataset[pntIndex].oldCentroid)
-                            continue;
-
-                            compDistance = calcDisCPU(dataset[pntIndex].vec,
-                                                      centroidDataset[clstIndex].vec,
-                                                      NDIM);
-
-                            if(compDistance < dataset[pntIndex].uprBound)
-                            {
-                                dataset[pntIndex].lwrBoundArr[0] = dataset[pntIndex].uprBound;
-                                dataset[pntIndex].centroidIndex = clstIndex;
-                                dataset[pntIndex].uprBound = compDistance;
-                            }
-                            else if(compDistance < dataset[pntIndex].lwrBoundArr[0])
-                            {
-                                dataset[pntIndex].lwrBoundArr[0] = compDistance;
-                            }
-                        }
-                    }
-                }			
-            }
-        }
-        index++;
-        conFlag = checkConverge(dataset);
-    }
-
-    *endTime = omp_get_wtime();
-    *ranIter = index + 1;
-
-    return 0;
+  return endTime - startTime;
 
 
 }
 
-
-unsigned int checkConverge(point *dataset)
+double startLloydOnCPU(PointInfo *pointInfo, 
+                     CentInfo *centInfo, 
+                     DTYPE *pointData, 
+                     DTYPE *centData, 
+                     const int numPnt, 
+                     const int numCent, 
+                     const int numDim,
+                     const int numThread,
+                     const int maxIter, 
+                     unsigned int *ranIter)
 {
-    int index;
+
+  double startTime = omp_get_wtime();
+  
+  unsigned int pntIndex, centIndex, dimIndex;
+  unsigned int index = 0;
+  unsigned int conFlag = 0;
+  
+  DTYPE *oldVecs = (DTYPE *)malloc(sizeof(DTYPE) * numDim * numCent);
+
+
+  omp_set_num_threads(numThread);
+
+  DTYPE currMin, currDis;
+
+  // start standard kmeans algorithm for MAXITER iterations
+  while(!conFlag && index < maxIter)
+  {
+    currMin = INFINITY;
+
+    #pragma omp parallel \
+    private(pntIndex, centIndex, currDis, currMin) \
+    shared(pointInfo, centInfo, pointData, centData)
     {
-        for(index = 0; index < NPOINT; index++)
+        #pragma omp for nowait schedule(static)
+        for(pntIndex = 0; pntIndex < numPnt; pntIndex++)
         {
-            if(dataset[index].centroidIndex != dataset[index].oldCentroid)
+            pointInfo[pntIndex].oldCentroid = pointInfo[pntIndex].centroidIndex;
+            for(centIndex = 0; centIndex < numCent; centIndex++)
             {
-                return 0;
-            }
-        }
-    }
-    return 1;
-}
-
-
-
-void pointCalcsFull(point *pointPtr,
-                    int *groupArr,
-                    DTYPE *driftArr,
-                    cent *centroidDataset)
-{
-    // index variables
-    unsigned int clstIndex, grpIndex;
-
-    DTYPE compDistance;
-    DTYPE oldLwr;
-    DTYPE oldCentUpr = pointPtr->uprBound;
-    DTYPE oldCentLwr = pointPtr->lwrBoundArr[centroidDataset[pointPtr->oldCentroid].groupNum];
-
-    for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-    {        
-        if(groupArr[grpIndex])
-        {
-            if(grpIndex == centroidDataset[pointPtr->oldCentroid].groupNum)
-            oldLwr = oldCentLwr + driftArr[grpIndex];
-            else
-            oldLwr = pointPtr->lwrBoundArr[grpIndex] + driftArr[grpIndex];
-                        
-            // set group's lower bound to find new lower bound for this iteration
-            pointPtr->lwrBoundArr[grpIndex] = INFINITY;
-
-            if(grpIndex == centroidDataset[pointPtr->oldCentroid].groupNum && pointPtr->oldCentroid != pointPtr->centroidIndex)
-            pointPtr->lwrBoundArr[centroidDataset[pointPtr->oldCentroid].groupNum] = oldCentUpr;
-
-            // loop through all of the group's centroids
-            for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-            {
-                if(clstIndex == pointPtr->oldCentroid)
-                continue;
-
-                if(centroidDataset[clstIndex].groupNum == grpIndex)
+                currDis = calcDisCPU(&pointData[pntIndex * numDim],
+                                     &centData[centIndex * numDim],
+                                     numDim);
+                if(currDis < currMin)
                 {
-                    // local filtering condition
-                    if(pointPtr->lwrBoundArr[grpIndex] < oldLwr  - centroidDataset[clstIndex].drift)
-                    continue;
-
-                    // perform distance calculation
-                    compDistance = calcDisCPU(pointPtr->vec, centroidDataset[clstIndex].vec, NDIM);
-
-                    if(compDistance < pointPtr->uprBound)
-                    {
-                        pointPtr->lwrBoundArr[centroidDataset[pointPtr->centroidIndex].groupNum] = pointPtr->uprBound;
-                        pointPtr->uprBound = compDistance;
-                        pointPtr->centroidIndex = clstIndex;
-                    }
-                    else if(compDistance < pointPtr->lwrBoundArr[grpIndex])
-                    {
-                        pointPtr->lwrBoundArr[grpIndex] = compDistance;
-                    }
+                    pointInfo[pntIndex].centroidIndex = centIndex;
+                    currMin = currDis;
                 }
             }
+            currMin = INFINITY;
         }
+    }
+
+    // clear centroids features
+    for(centIndex = 0; centIndex < numCent; centIndex++)
+    {
+        for(dimIndex = 0; dimIndex < numDim; dimIndex++)
+        {
+            oldVecs[(centIndex * numDim) + dimIndex] = centData[(centIndex * numDim) + dimIndex];
+            centData[(centIndex * numDim) + dimIndex] = 0.0;
+        }
+        centInfo[centIndex].count = 0;
+    }
+    // sum all assigned point's features
+    #pragma omp parallel \
+    private(pntIndex, dimIndex) \
+    shared(pointInfo, centInfo, pointData, centData)
+    {
+      #pragma omp for nowait schedule(static)
+      for(pntIndex = 0; pntIndex < numPnt; pntIndex++)
+      {
+        #pragma omp atomic
+        centInfo[pointInfo[pntIndex].centroidIndex].count++;
+
+        for(dimIndex = 0; dimIndex < numDim; dimIndex++)
+        {
+          #pragma omp atomic
+          centData[(pointInfo[pntIndex].centroidIndex * numDim) + dimIndex] += pointData[(pntIndex * numDim) + dimIndex];
+        }
+      }
+    }
+    // take the average of each feature to get new centroid features
+    for(centIndex = 0; centIndex < numCent; centIndex++)
+    {
+      for(dimIndex = 0; dimIndex < numDim; dimIndex++)
+      {
+        if(centInfo[centIndex].count > 0)
+        centData[(centIndex * numDim) + dimIndex] /= centInfo[centIndex].count;
         else
-        {
-            if(grpIndex == centroidDataset[pointPtr->oldCentroid].groupNum && pointPtr->oldCentroid != pointPtr->centroidIndex)
-            pointPtr->lwrBoundArr[centroidDataset[pointPtr->oldCentroid].groupNum] = oldCentUpr;
-        }
+        centData[(centIndex * numDim) + dimIndex] = oldVecs[(centIndex * numDim) + dimIndex];
+      }
     }
+    index++;
+    conFlag = checkConverge(pointInfo, numPnt);
+  }
+
+  *ranIter = index;
+
+  double endTime = omp_get_wtime();
+  
+  free(oldVecs);
+  
+  return endTime - startTime;
 }
 
 
-/*
-Uses more space but less branching
-*/
-void pointCalcsFullAlt(point *pointPtr,
-                       int *groupArr,
-                       DTYPE *driftArr,
-                       cent *centroidDataset)
+unsigned int checkConverge(PointInfo *pointInfo, 
+                           const int numPnt)
 {
-    // index variables
-    unsigned int clstIndex, grpIndex;
-
-    DTYPE compDistance;
-    DTYPE oldLwrs[NGROUPCPU];
-
-    for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-    {
-        // if the group is not blocked by group filter
-        if(groupArr[grpIndex])
-        {
-            oldLwrs[grpIndex] = pointPtr->lwrBoundArr[grpIndex] + driftArr[grpIndex];
-
-            // reset the lwrBoundArr to be only new lwrBounds
-            pointPtr->lwrBoundArr[grpIndex] = INFINITY;
-        }
-    }
-
-    for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-    {
-        // if the centroid's group is marked in groupArr
-        if(groupArr[centroidDataset[clstIndex].groupNum])
-        {
-            // if it was the originally assigned cluster, no need to calc dist
-            if(clstIndex == pointPtr->oldCentroid)
-            continue;
-
-            if(pointPtr->lwrBoundArr[centroidDataset[clstIndex].groupNum] < oldLwrs[centroidDataset[clstIndex].groupNum] - centroidDataset[clstIndex].drift)
-            continue;
-            
-            // compute distance between point and centroid
-            compDistance = calcDisCPU(pointPtr->vec, 
-                                      centroidDataset[clstIndex].vec,
-                                      NDIM);
-            
-            if(compDistance < pointPtr->uprBound)
-            {
-                pointPtr->lwrBoundArr[centroidDataset[pointPtr->centroidIndex].groupNum] = pointPtr->uprBound;
-                pointPtr->centroidIndex = clstIndex;
-                pointPtr->uprBound = compDistance;
-            }
-            else if(compDistance < pointPtr->lwrBoundArr[centroidDataset[clstIndex].groupNum])
-            {   
-                pointPtr->lwrBoundArr[centroidDataset[clstIndex].groupNum] = compDistance;
-            }
-        }
-    }    
+  for(int index = 0; index < numPnt; index++)
+  {
+    if(pointInfo[index].centroidIndex != pointInfo[index].oldCentroid)
+    return 0;
+  }
+  return 1;
 }
 
 
-void pointCalcsSimple(point *pointPtr,
-                      int *groupArr,
-                      DTYPE *driftArr,
-                      cent *centroidDataset)
+
+void pointCalcsFullCPU(PointInfo *pointInfoPtr,
+                       CentInfo *centInfo,
+                       DTYPE *pointDataPtr,
+                       DTYPE *pointLwrPtr,
+                       DTYPE *centData,
+                       DTYPE *maxDriftArr,
+                       unsigned int *groupArr,
+                       const int numPnt,
+                       const int numCent,
+                       const int numGrp,
+                       const int numDim)
 {
-    // index variables
-    unsigned int clstIndex, grpIndex;
+  // index variables
+  unsigned int grpIndex, centIndex;
 
-    DTYPE compDistance;
+  DTYPE compDistance;
+  DTYPE oldLwr = INFINITY;
+  DTYPE oldCentUpr = pointInfoPtr->uprBound;
+  DTYPE oldCentLwr = pointLwrPtr[centInfo[pointInfoPtr->oldCentroid].groupNum];
 
-    for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
+  for(grpIndex = 0; grpIndex < numGrp; grpIndex++)
+  {        
+    if(groupArr[grpIndex])
     {
-        // if the group is not blocked by group filter
-        if(groupArr[grpIndex])
-        {
-            // reset the lwrBoundArr to be only new lwrBounds
-            pointPtr->lwrBoundArr[grpIndex] = INFINITY;
-        }
-    }
-    
-    for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-    {
-        // if the centroid's group is marked in groupArr
-        if(groupArr[centroidDataset[clstIndex].groupNum])
-        {
-            // if it was the originally assigned cluster, no need to calc dist
-            if(clstIndex == pointPtr->oldCentroid)
-            continue;
-        
-            // compute distance between point and centroid
-            compDistance = calcDisCPU(pointPtr->vec, 
-                                      centroidDataset[clstIndex].vec,
-                                      NDIM);
+      if(grpIndex == centInfo[pointInfoPtr->oldCentroid].groupNum)
+      oldLwr = oldCentLwr + maxDriftArr[grpIndex];
+      else
+      oldLwr = pointLwrPtr[grpIndex] + maxDriftArr[grpIndex];
 
-            if(compDistance < pointPtr->uprBound)
-            {
-                pointPtr->lwrBoundArr[centroidDataset[pointPtr->centroidIndex].groupNum] = pointPtr->uprBound;
-                pointPtr->centroidIndex = clstIndex;
-                pointPtr->uprBound = compDistance;
-            }
-            else if(compDistance < pointPtr->lwrBoundArr[centroidDataset[clstIndex].groupNum])
-            {
-                pointPtr->lwrBoundArr[centroidDataset[clstIndex].groupNum] = compDistance;
-            }
+      // set group's lower bound to find new lower bound for this iteration
+      pointLwrPtr[grpIndex] = INFINITY;
+
+      if(grpIndex == centInfo[pointInfoPtr->oldCentroid].groupNum && 
+        pointInfoPtr->oldCentroid != pointInfoPtr->centroidIndex)
+      pointLwrPtr[centInfo[pointInfoPtr->oldCentroid].groupNum] = oldCentUpr;
+
+      // loop through all of the group's centroids
+      for(centIndex = 0; centIndex < numCent; centIndex++)
+      {
+        if(centIndex == pointInfoPtr->oldCentroid)
+        continue;
+
+        if(grpIndex == centInfo[centIndex].groupNum)
+        {
+          // local filtering condition
+          if(pointLwrPtr[grpIndex] < oldLwr  - centInfo[centIndex].drift)
+          continue;
+
+          // perform distance calculation
+          compDistance = 
+            calcDisCPU(pointDataPtr, &centData[centIndex * numDim], numDim);
+
+          if(compDistance < pointInfoPtr->uprBound)
+          {
+            pointLwrPtr[centInfo[pointInfoPtr->centroidIndex].groupNum] = pointInfoPtr->uprBound;
+            pointInfoPtr->centroidIndex = centIndex;
+            pointInfoPtr->uprBound = compDistance;
+          }
+          else if(compDistance < pointLwrPtr[grpIndex])
+          {
+            pointLwrPtr[grpIndex] = compDistance;
+          }
         }
+      }
     }
+  }
+}
+
+void pointCalcsSimpleCPU(PointInfo *pointInfoPtr,
+                       CentInfo *centInfo,
+                       DTYPE *pointDataPtr,
+                       DTYPE *pointLwrPtr,
+                       DTYPE *centData,
+                       DTYPE *maxDriftArr,
+                       unsigned int *groupArr,
+                       const int numPnt,
+                       const int numCent,
+                       const int numGrp,
+                       const int numDim)
+{
+  // index variables
+  unsigned int centIndex, grpIndex;
+
+  DTYPE compDistance;
+
+  for(grpIndex = 0; grpIndex < numGrp; grpIndex++)
+  {
+    // if the group is not blocked by group filter
+    if(groupArr[grpIndex])
+    {
+      // reset the lwrBoundArr to be only new lwrBounds
+      pointLwrPtr[grpIndex] = INFINITY;
+    }
+  }
+  
+  for(centIndex = 0; centIndex < numCent; centIndex++)
+  {
+    // if the centroid's group is marked in groupArr
+    if(groupArr[centInfo[centIndex].groupNum])
+    {
+      // if it was the originally assigned cluster, no need to calc dist
+      if(centIndex == pointInfoPtr->oldCentroid)
+      continue;
+  
+      // compute distance between point and centroid
+      compDistance = calcDisCPU(pointDataPtr, &centData[centIndex * numDim], numDim);
+
+      if(compDistance < pointInfoPtr->uprBound)
+      {
+        pointLwrPtr[centInfo[pointInfoPtr->centroidIndex].groupNum] = pointInfoPtr->uprBound;
+        pointInfoPtr->centroidIndex = centIndex;
+        pointInfoPtr->uprBound = compDistance;
+      }
+      else if(compDistance < pointLwrPtr[centInfo[centIndex].groupNum])
+      {
+        pointLwrPtr[centInfo[centIndex].groupNum] = compDistance;
+      }
+    }
+  }
 }
 
 
@@ -632,164 +641,187 @@ void pointCalcsSimple(point *pointPtr,
 /*
 Function used to do an intial iteration of K-means
 */
-void initPoints(point *dataset, 
-                cent *centroidDataset)
+void initPoints(PointInfo *pointInfo,
+              CentInfo *centInfo, 
+              DTYPE *pointData, 
+              DTYPE *pointLwrs, 
+              DTYPE *centData, 
+              const int numPnt, 
+              const int numCent, 
+              const int numGrp, 
+              const int numDim, 
+              const int numThread)
 {
-    int pntIndex, clstIndex;
+  unsigned int pntIndex, centIndex;
 
-    DTYPE currDistance;
-    
-    // start single standard k-means iteration for initial bounds and cluster assignments
-        // assignment
-    #pragma omp parallel private(pntIndex, clstIndex, currDistance) shared(dataset, centroidDataset)
+  DTYPE currDistance;
+  
+  // start single standard k-means iteration for initial bounds and cluster assignments
+    // assignment
+  #pragma omp parallel \
+  private(pntIndex, centIndex, currDistance) \
+  shared(pointInfo, centInfo, pointData, pointLwrs, centData)
+  {
+    #pragma omp for schedule(static)
+    for(pntIndex = 0; pntIndex < numPnt; pntIndex++)
     {
-        #pragma omp for schedule(static)
-        for(pntIndex = 0; pntIndex < NPOINT; pntIndex++)
+      pointInfo[pntIndex].uprBound = INFINITY;
+
+      // for all centroids
+      for(centIndex = 0; centIndex < numCent; centIndex++)
+      {
+        // currDistance is equal to the distance between the current feature
+        // vector being inspected, and the current centroid being compared
+        currDistance = calcDisCPU(&pointData[pntIndex * numDim], 
+                                  &centData[centIndex * numDim],
+                                  numDim);
+
+        // if the the currDistance is less than the current minimum distance
+        if(currDistance < pointInfo[pntIndex].uprBound)
         {
-            dataset[pntIndex].uprBound = INFINITY;
-
-            // for all centroids
-            for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-            {
-                // currDistance is equal to the distance between the current feature
-                // vector being inspected, and the current centroid being compared
-                currDistance = calcDisCPU(dataset[pntIndex].vec, 
-                                          centroidDataset[clstIndex].vec,
-                                          NDIM);
-
-                // if the the currDistance is less than the current minimum distance
-                if(currDistance < dataset[pntIndex].uprBound)
-                {
-                    if(dataset[pntIndex].uprBound != INFINITY)
-                    dataset[pntIndex].lwrBoundArr[centroidDataset[dataset[pntIndex].centroidIndex].groupNum] = dataset[pntIndex].uprBound;
-                    // update assignment and upper bound
-                    dataset[pntIndex].centroidIndex = clstIndex;
-                    dataset[pntIndex].uprBound = currDistance;
-                }
-                else if(currDistance < dataset[pntIndex].lwrBoundArr[centroidDataset[clstIndex].groupNum])
-                {
-                    dataset[pntIndex].lwrBoundArr[centroidDataset[clstIndex].groupNum] = currDistance;
-                }
-            }
+          if(pointInfo[pntIndex].uprBound != INFINITY)
+          pointLwrs[(pntIndex * numGrp) + 
+            centInfo[pointInfo[pntIndex].centroidIndex].groupNum] = 
+              pointInfo[pntIndex].uprBound;
+          // update assignment and upper bound
+          pointInfo[pntIndex].centroidIndex = centIndex;
+          pointInfo[pntIndex].uprBound = currDistance;
         }
+        else if(currDistance < pointLwrs[(pntIndex * numGrp) + centInfo[centIndex].groupNum])
+        {
+          pointLwrs[(pntIndex * numGrp) + centInfo[centIndex].groupNum] = currDistance;
+        }
+      }
     }
+  }
 }
 
-void updateCentroids(point *dataset, 
-                     struct cent *centroidDataset, 
-                     DTYPE *maxDriftArr)
+void updateCentroids(PointInfo *pointInfo, 
+                   CentInfo *centInfo, 
+                   DTYPE *pointData,
+                   DTYPE *centData, 
+                   DTYPE *maxDriftArr,
+                   const int numPnt, 
+                   const int numCent, 
+                   const int numGrp, 
+                   const int numDim, 
+                   const int numThread)
 {
-    // holds the number of points assigned to each centroid formerly and currently
-    int oldCounts[NCLUST];
-    int newCounts[NCLUST];
+  unsigned int pntIndex, centIndex, grpIndex, dimIndex;
+  
+  DTYPE compDrift;
+  
+  // holds the number of points assigned to each centroid formerly and currently
+  unsigned int *oldCounts = (unsigned int *)malloc(sizeof(unsigned int) * numCent);
+  unsigned int *newCounts = (unsigned int *)malloc(sizeof(unsigned int) * numCent);
+
+  // holds the new vector calculated
+  DTYPE *oldVecs = (DTYPE *)malloc(sizeof(DTYPE) * numCent * numDim);
+  DTYPE oldCentFeat;
 
 
-    // comparison variables
-    DTYPE compDrift;
+  omp_set_num_threads(numThread);
 
-    // holds the new vector calculated
-    vector oldVec;
-    DTYPE oldFeature;
+  omp_lock_t driftLock;
+  omp_init_lock(&driftLock);
+  
+  // allocate data for new and old vector sums
+  DTYPE *oldSums = (DTYPE *)malloc(sizeof(DTYPE)*numCent*numDim);
+  DTYPE *newSums = (DTYPE *)malloc(sizeof(DTYPE)*numCent*numDim);
+  DTYPE oldSumFeat;
+  DTYPE newSumFeat;
 
-    omp_set_num_threads(NTHREAD);
-
-    omp_lock_t driftLock;
-
-    omp_init_lock(&driftLock);
-    
-
-    // allocate data for new and old vector sums
-    vector *oldSumPtr = 
-            (struct vector *)malloc(sizeof(struct vector)*NCLUST);
-    vector *newSumPtr = 
-            (struct vector *)malloc(sizeof(struct vector)*NCLUST);
-
-
-    DTYPE oldSumFeat;
-    DTYPE newSumFeat;
-
-    unsigned int pntIndex, clstIndex, grpIndex, dimIndex;
-    
-    for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
+  for(centIndex = 0; centIndex < numCent; centIndex++)
+  {
+    for(dimIndex = 0; dimIndex < numDim; dimIndex++)
     {
-        maxDriftArr[grpIndex] = 0.0;
+      oldSums[(centIndex * numDim) + dimIndex] = 0.0;
+      newSums[(centIndex * numDim) + dimIndex] = 0.0;
     }
-    for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
+    oldCounts[centIndex] = 0;
+    newCounts[centIndex] = 0;
+  }
+  for(grpIndex = 0; grpIndex < numGrp; grpIndex++)
+  {
+    maxDriftArr[grpIndex] = 0.0;
+  }
+  
+  for(pntIndex = 0; pntIndex < numPnt; pntIndex++)
+  {
+    // add one to the old count and new count for each centroid
+    if(pointInfo[pntIndex].oldCentroid >= 0)
+    oldCounts[pointInfo[pntIndex].oldCentroid]++;
+
+    newCounts[pointInfo[pntIndex].centroidIndex]++;
+
+    // if the old centroid does not match the new centroid,
+    // add the points vector to each 
+    if(pointInfo[pntIndex].oldCentroid != pointInfo[pntIndex].centroidIndex)
     {
-        for(dimIndex = 0; dimIndex < NDIM; dimIndex++)
+      for(dimIndex = 0; dimIndex < numDim; dimIndex++)
+      {
+        if(pointInfo[pntIndex].oldCentroid >= 0)
         {
-            oldSumPtr[clstIndex].feat[dimIndex] = 0.0;
-            newSumPtr[clstIndex].feat[dimIndex] = 0.0;
+          oldSums[(pointInfo[pntIndex].oldCentroid * numDim) + dimIndex] += 
+            pointData[(pntIndex * numDim) + dimIndex];
         }
-    
-        oldCounts[clstIndex] = 0;
-        newCounts[clstIndex] = 0;
+        newSums[(pointInfo[pntIndex].centroidIndex * numDim) + dimIndex] += 
+          pointData[(pntIndex * numDim) + dimIndex];
+      }
     }
-    
-    for(pntIndex = 0; pntIndex < NPOINT; pntIndex++)
+  }
+
+  
+
+  #pragma omp parallel \
+  private(centIndex, dimIndex, oldCentFeat, oldSumFeat, newSumFeat, compDrift) \
+  shared(driftLock, centInfo, centData, maxDriftArr, oldVecs)
+  {
+  // create new centroid points
+    #pragma omp for schedule(static)
+    for(centIndex = 0; centIndex < numCent; centIndex++)
     {
-        // add one to the old count and new count for each centroid
-        if(dataset[pntIndex].oldCentroid >= 0)
-        oldCounts[dataset[pntIndex].oldCentroid]++;
-        
-        newCounts[dataset[pntIndex].centroidIndex]++;
-
-        // if the old centroid does not match the new centroid,
-        // add the points vector to each 
-        if(dataset[pntIndex].oldCentroid != dataset[pntIndex].centroidIndex)
+      for(dimIndex = 0; dimIndex < numDim; dimIndex++)
+      {
+        if(newCounts[centIndex] > 0)
         {
-            for(dimIndex = 0; dimIndex < NDIM; dimIndex++)
-            {
-                if(dataset[pntIndex].oldCentroid >= 0)
-                oldSumPtr[dataset[pntIndex].oldCentroid].feat[dimIndex] += 
-                                    dataset[pntIndex].vec.feat[dimIndex];
+          oldVecs[(centIndex * numDim) + dimIndex] = centData[(centIndex * numDim) + dimIndex];
+          oldCentFeat = oldVecs[(centIndex * numDim) + dimIndex];
+          oldSumFeat = oldSums[(centIndex * numDim) + dimIndex];
+          newSumFeat = newSums[(centIndex * numDim) + dimIndex];
 
-                newSumPtr[dataset[pntIndex].centroidIndex].feat[dimIndex] += 
-                                    dataset[pntIndex].vec.feat[dimIndex];
-            }
+          centData[(centIndex * numDim) + dimIndex] = 
+          (oldCentFeat * oldCounts[centIndex] - oldSumFeat + newSumFeat) 
+                                                  / newCounts[centIndex];
+          //printf("(%f * %d - %f + %f) / %d\n", oldCentFeat,oldCounts[centIndex],oldSumFeat,newSumFeat,newCounts[centIndex]);
+          
         }
-    }
-
-    #pragma omp parallel private(clstIndex,dimIndex,oldVec,oldFeature,oldSumFeat,newSumFeat, compDrift) shared(driftLock,centroidDataset, maxDriftArr)
-    {
-    // create new centroid points
-        #pragma omp for schedule(static)
-        for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
+        else
         {
-            for(dimIndex = 0; dimIndex < NDIM; dimIndex++)
-            {
-                if(newCounts[clstIndex] > 0)
-                {
-                    oldVec.feat[dimIndex] = centroidDataset[clstIndex].vec.feat[dimIndex];
-                    oldFeature = oldVec.feat[dimIndex];
-                    oldSumFeat = oldSumPtr[clstIndex].feat[dimIndex];
-                    newSumFeat = newSumPtr[clstIndex].feat[dimIndex];
-
-                    centroidDataset[clstIndex].vec.feat[dimIndex] = 
-                    (oldFeature * oldCounts[clstIndex] - oldSumFeat + newSumFeat) 
-                                                            / newCounts[clstIndex];
-                }
-                else
-                {
-                    // if the centroid has no current members, no change occurs to its position
-                    oldVec.feat[dimIndex] = centroidDataset[clstIndex].vec.feat[dimIndex];
-                }
-            }
-
-            compDrift = calcDisCPU(oldVec, centroidDataset[clstIndex].vec, NDIM);
-            omp_set_lock(&driftLock);
-            if(compDrift > maxDriftArr[centroidDataset[clstIndex].groupNum])
-            {
-                maxDriftArr[centroidDataset[clstIndex].groupNum] = compDrift;
-            }
-            omp_unset_lock(&driftLock);
-            centroidDataset[clstIndex].drift = compDrift;
+          // if the centroid has no current members, no change occurs to its position
+          oldVecs[(centIndex * numDim) + dimIndex] = centData[(centIndex * numDim) + dimIndex];
         }
+      }
+      compDrift = calcDisCPU(&oldVecs[centIndex * numDim], 
+                             &centData[centIndex * numDim], numDim);
+      omp_set_lock(&driftLock);
+      // printf("%d\n",centInfo[centIndex].groupNum);
+      if(compDrift > maxDriftArr[centInfo[centIndex].groupNum])
+      {
+        maxDriftArr[centInfo[centIndex].groupNum] = compDrift;
+      }
+      omp_unset_lock(&driftLock);
+      centInfo[centIndex].drift = compDrift;
     }
-    omp_destroy_lock(&driftLock);
-
-    free(newSumPtr);
-    free(oldSumPtr);
+  }
+  omp_destroy_lock(&driftLock);
+  
+  free(oldCounts);
+  free(newCounts);
+  free(oldVecs);
+  free(oldSums);
+  free(newSums);
+  
 }
 
 
@@ -797,618 +829,3 @@ void updateCentroids(point *dataset,
 //////////////////////////////////////////////////
 // Overloads for counting distance calculations //
 //////////////////////////////////////////////////
-
-int startFullOnCPU(point *dataset,
-                   cent *centroidDataset,
-                   unsigned long long int *distCalcCount,
-                   double *startTime,
-                   double *endTime,
-                   unsigned int *ranIter)
-{
-    // error bad input
-    if(distCalcCount == NULL)
-    return 1;
-
-    *startTime = omp_get_wtime();
-
-    // index variables
-    unsigned int pntIndex, grpIndex;
-    unsigned int index = 0;
-    unsigned int conFlag = 0;
-
-    unsigned long long int pointCalcs;
-
-    // array to contain the maximum drift of each group of centroids
-    // note: shared amongst all points
-    DTYPE driftArr[NGROUPCPU];
-
-    // array to contain integer flags which mark which groups need to be checked
-    // for a potential new centroid
-    // note: unique to each point
-    int groupLclArr[NGROUPCPU];
-
-    omp_set_num_threads(NTHREAD);
-
-    // the minimum of all the lower bounds for a single point
-    DTYPE tmpGlobLwr = INFINITY;
-    
-    // cluster the centroids into NGROUPCPU groups
-    groupCent(centroidDataset, NCLUST, NGROUPCPU, NDIM);
-
-    // run one iteration of standard kmeans for initial centroid assignments
-    initPoints(dataset, centroidDataset, distCalcCount);
-
-    // master loop
-    while(!conFlag && index < MAXITER)
-    {
-        // clear drift array each new iteration
-        for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-        {
-            driftArr[grpIndex] = 0.0;
-        }
-    
-        // update centers via optimised update method
-        updateCentroids(dataset, centroidDataset, driftArr);
-
-        // filtering done in parallel
-        #pragma omp parallel private(pntIndex, grpIndex, tmpGlobLwr, groupLclArr, pointCalcs) shared(dataset, centroidDataset, driftArr)
-        {
-            #pragma omp for schedule(static)
-            for(pntIndex = 0; pntIndex < NPOINT; pntIndex++)
-            {
-                // reset old centroid before possibly finding a new one
-                dataset[pntIndex].oldCentroid = dataset[pntIndex].centroidIndex;
-
-                tmpGlobLwr = INFINITY;
-
-                // update upper bound
-                    // ub = ub + centroid's drift
-                dataset[pntIndex].uprBound +=
-                        centroidDataset[dataset[pntIndex].centroidIndex].drift;
-
-                // update group lower bounds
-                    // lb = lb - maxGroupDrift
-                for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-                {
-                    dataset[pntIndex].lwrBoundArr[grpIndex] -= driftArr[grpIndex];
-
-                    if(dataset[pntIndex].lwrBoundArr[grpIndex] < tmpGlobLwr)
-                    {
-                        // assign temp global lowerBound
-                        // for all lowerbounds assigned to point
-                        tmpGlobLwr = dataset[pntIndex].lwrBoundArr[grpIndex];
-                    }
-                }
-
-                // global filtering
-                // if global lowerbound >= upper bound
-                if(tmpGlobLwr < dataset[pntIndex].uprBound)
-                {
-                    // tighten upperbound ub = d(x, b(x))
-                    dataset[pntIndex].uprBound = 
-                        calcDisCPU(dataset[pntIndex].vec,
-                                   centroidDataset[dataset[pntIndex].centroidIndex].vec,
-                                   NDIM);
-
-                    #pragma omp atomic
-                    *distCalcCount+=1;
-
-                    // check condition again
-                    if(tmpGlobLwr < dataset[pntIndex].uprBound)
-                    {
-                        // group filtering
-                        for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-                        {
-                            // mark groups that need to be checked
-                            if(dataset[pntIndex].lwrBoundArr[grpIndex] < dataset[pntIndex].uprBound)
-                            groupLclArr[grpIndex] = 1;
-                            else
-                            groupLclArr[grpIndex] = 0;
-                        }
-
-                        // pass group array and point to go execute distance calculations
-                        pointCalcs = pointCalcsFullCount(&dataset[pntIndex],
-                                                         groupLclArr,
-                                                         driftArr,
-                                                         centroidDataset);
-
-                        #pragma omp atomic
-                        *distCalcCount+=pointCalcs;
-                    }
-                }
-            }
-        }
-        index++;
-        conFlag = checkConverge(dataset);
-    }
-
-    *endTime = omp_get_wtime();
-    *ranIter = index + 1;
-
-    return 0;
-}
-
-
-
-/*
-CPU implementation of the simplified Yinyang algorithm
-given only a file name with the points and a start and end time
-*/
-int startSimpleOnCPU(point *dataset,
-                     cent *centroidDataset,
-                     unsigned long long int *distCalcCount,
-                     double *startTime,
-                     double *endTime,
-                     unsigned int *ranIter)
-{
-    if(distCalcCount == NULL)
-    return 1;
-
-    unsigned long long int pointCalcs;
-
-    *startTime = omp_get_wtime();
-
-    // index variables
-    unsigned int pntIndex, grpIndex;
-    unsigned int index = 0;
-    unsigned int conFlag = 0;
-
-    // array to contain the maximum drift of each group of centroids
-    // note: shared amongst all points
-    DTYPE driftArr[NGROUPCPU];
-
-    // array to contain integer flags which mark which groups need to be checked
-    // for a potential new centroid
-    // note: unique to each point
-    int groupLclArr[NGROUPCPU];
-
-    omp_set_num_threads(NTHREAD);
-
-    // the minimum of all the lower bounds for a single point
-    DTYPE tmpGlobLwr = INFINITY;
-    
-    // cluster the centroids int NGROUP groups
-    groupCent(centroidDataset, NCLUST, NGROUPCPU, NDIM);
-
-    // run one iteration of standard kmeans for initial centroid assignments
-    initPoints(dataset, centroidDataset, distCalcCount);
-
-    // master loop
-    while(!conFlag && index < MAXITER)
-    {
-        // clear drift array each new iteration
-        for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-        {
-            driftArr[grpIndex] = 0.0;
-        }
-    
-        // update centers via optimised update method
-        updateCentroids(dataset, centroidDataset, driftArr);
-
-        // filtering done in parallel
-        #pragma omp parallel private(pntIndex, grpIndex, tmpGlobLwr, groupLclArr, pointCalcs) shared(dataset, centroidDataset, driftArr)
-        {
-            #pragma omp for schedule(static)
-            for(pntIndex = 0; pntIndex < NPOINT; pntIndex++)
-            {
-                // reset old centroid before possibly finding a new one
-                dataset[pntIndex].oldCentroid = dataset[pntIndex].centroidIndex;
-
-                tmpGlobLwr = INFINITY;
-
-                // update upper bound
-                    // ub = ub + centroid's drift
-                dataset[pntIndex].uprBound +=
-                        centroidDataset[dataset[pntIndex].centroidIndex].drift;
-
-                // update group lower bounds
-                    // lb = lb - maxGroupDrift
-                for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-                {
-                    dataset[pntIndex].lwrBoundArr[grpIndex] -= driftArr[grpIndex];
-
-                    if(dataset[pntIndex].lwrBoundArr[grpIndex] < tmpGlobLwr)
-                    {
-                        // assign temp global lowerBound
-                        // for all lowerbounds assigned to point
-                        tmpGlobLwr = dataset[pntIndex].lwrBoundArr[grpIndex];
-                    }
-                }
-
-                // global filtering
-                // if global lowerbound >= upper bound
-                if(tmpGlobLwr < dataset[pntIndex].uprBound)
-                {
-                    // tighten upperbound ub = d(x, b(x))
-                    dataset[pntIndex].uprBound = 
-                        calcDisCPU(dataset[pntIndex].vec, 
-                            centroidDataset[dataset[pntIndex].centroidIndex].vec,
-                            NDIM);
-
-                    #pragma omp atomic
-                    *distCalcCount+=1;
-
-                    // check condition again
-                    if(tmpGlobLwr < dataset[pntIndex].uprBound)
-                    {
-                        // group filtering
-                        for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-                        {
-                            // mark groups that need to be checked
-                            if(dataset[pntIndex].lwrBoundArr[grpIndex] < dataset[pntIndex].uprBound)
-                            groupLclArr[grpIndex] = 1;
-                            else
-                            groupLclArr[grpIndex] = 0;
-                        }
-                        // pass group array and point to go execute distance calculations
-                        pointCalcs = pointCalcsSimpleCount(&dataset[pntIndex],
-                                                           groupLclArr,
-                                                           driftArr,
-                                                           centroidDataset);
-                        #pragma omp atomic
-                        *distCalcCount+=pointCalcs;
-                    }
-                }
-            }
-        }
-        index++;
-        conFlag = checkConverge(dataset);
-        printf("index %d: %llu calcs\n", index, *distCalcCount);
-    }
-    *endTime = omp_get_wtime();
-    *ranIter = index + 1;
-
-    return 0;
-}
-
-
-int startSuperOnCPU(point *dataset,
-                    cent *centroidDataset,
-                    unsigned long long int *distCalcCount,
-                    double *startTime,
-                    double *endTime,
-                    unsigned int *ranIter)
-{
-
-    if(distCalcCount == NULL)
-    return 1;
-
-    *startTime = omp_get_wtime();
-
-    // index variables
-    unsigned int pntIndex, clstIndex;
-    unsigned int index = 0;
-    unsigned int conFlag = 0;
-
-    DTYPE compDistance;
-    DTYPE maxDrift;
-
-    omp_set_num_threads(NTHREAD);
-
-    // place all centroids in one "group"
-    for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-    {
-        centroidDataset[clstIndex].groupNum = 0;
-    }
-
-    // run one iteration of standard kmeans for initial centroid assignments
-    initPoints(dataset, centroidDataset, distCalcCount);
-
-    // master loop
-    while(!conFlag && index < MAXITER)
-    {
-        // clear maxdrift
-        maxDrift = 0.0;
-
-        // update centers via optimised update method
-        updateCentroids(dataset, centroidDataset, &maxDrift);
-
-        // filtering done in parallel
-        #pragma omp parallel private(pntIndex, clstIndex) shared(dataset, centroidDataset, maxDrift)
-        {
-            #pragma omp for schedule(static)
-            for(pntIndex = 0; pntIndex < NPOINT; pntIndex++)
-            {
-                // reset old centroid before possibly finding a new one
-                dataset[pntIndex].oldCentroid = dataset[pntIndex].centroidIndex;
-
-                // update upper bound
-                    // ub = ub + centroid's drift
-                dataset[pntIndex].uprBound +=
-                        centroidDataset[dataset[pntIndex].centroidIndex].drift;
-
-                // update lower bound
-                dataset[pntIndex].lwrBoundArr[0] -= maxDrift;
-
-                // global filtering
-                // if global lowerbound >= upper bound
-                if(dataset[pntIndex].lwrBoundArr[0] < dataset[pntIndex].uprBound)
-                {
-                    // tighten upperbound ub = d(x, b(x))
-                    dataset[pntIndex].uprBound = 
-                        calcDisCPU(dataset[pntIndex].vec, 
-                            centroidDataset[dataset[pntIndex].centroidIndex].vec,
-                            NDIM);
-
-                    #pragma omp atomic
-                    *distCalcCount+=1;
-
-                    // check condition again
-                    if(dataset[pntIndex].lwrBoundArr[0] < dataset[pntIndex].uprBound)
-                    {
-                        dataset[pntIndex].lwrBoundArr[0] = INFINITY;
-
-                        // calculate distance between point and every cluster
-                        for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-                        {
-                            // if clstIndex is the one already assigned, skip the calculation
-                            if(clstIndex == dataset[pntIndex].oldCentroid)
-                            continue;
-
-                            compDistance = calcDisCPU(dataset[pntIndex].vec,
-                                                      centroidDataset[clstIndex].vec,
-                                                      NDIM);
-
-                            #pragma omp critical
-                            *distCalcCount+=1;
-
-                            if(compDistance < dataset[pntIndex].uprBound)
-                            {
-                                dataset[pntIndex].lwrBoundArr[0] = dataset[pntIndex].uprBound;
-                                dataset[pntIndex].centroidIndex = clstIndex;
-                                dataset[pntIndex].uprBound = compDistance;
-                            }
-                            else if(compDistance < dataset[pntIndex].lwrBoundArr[0])
-                            {
-                                dataset[pntIndex].lwrBoundArr[0] = compDistance;
-                            }
-                        }
-                    }
-                }			
-            }
-        }
-        index++;
-        printf("index %d: %llu calcs\n", index, *distCalcCount);
-        conFlag = checkConverge(dataset);
-    }
-
-    *endTime = omp_get_wtime();
-    *ranIter = index + 1;
-
-    return 0;
-
-
-}
-
-/*
-Function used to do an intial iteration of K-means
-*/
-void initPoints(point *dataset, 
-                cent *centroidDataset,
-                unsigned long long int *distCalcCount)
-{
-    int pntIndex, clstIndex;
-
-    DTYPE currDistance;
-    
-    // start single standard k-means iteration for initial bounds and cluster assignments
-        // assignment
-    #pragma omp parallel private(pntIndex, clstIndex, currDistance) shared(dataset, centroidDataset)
-    {
-        #pragma omp for schedule(static)
-        for(pntIndex = 0; pntIndex < NPOINT; pntIndex++)
-        {
-            dataset[pntIndex].uprBound = INFINITY;
-
-            // for all centroids
-            for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-            {
-                // currDistance is equal to the distance between the current feature
-                // vector being inspected, and the current centroid being compared
-                currDistance = calcDisCPU(dataset[pntIndex].vec, 
-                                          centroidDataset[clstIndex].vec,
-                                          NDIM);
-		        #pragma omp atomic
-		        *distCalcCount+=1;
-
-                // if the the currDistance is less than the current minimum distance
-                if(currDistance < dataset[pntIndex].uprBound)
-                {
-                    if(dataset[pntIndex].uprBound != INFINITY)
-                    dataset[pntIndex].lwrBoundArr[centroidDataset[dataset[pntIndex].centroidIndex].groupNum] = dataset[pntIndex].uprBound;
-                    // update assignment and upper bound
-                    dataset[pntIndex].centroidIndex = clstIndex;
-                    dataset[pntIndex].uprBound = currDistance;
-                }
-                else if(currDistance < dataset[pntIndex].lwrBoundArr[centroidDataset[clstIndex].groupNum])
-                {
-                    dataset[pntIndex].lwrBoundArr[centroidDataset[clstIndex].groupNum] = currDistance;
-                }
-            }
-        }
-    }
-}
-
-
-unsigned long long int pointCalcsFullCount(point *pointPtr,
-                                           int *groupArr,
-                                           DTYPE *driftArr,
-                                           cent *centroidDataset)
-{
-    // index variables
-    unsigned int clstIndex, grpIndex;
-    unsigned long long int count = 0;
-
-    DTYPE compDistance;
-    DTYPE oldLwr;
-    DTYPE oldCentUpr = pointPtr->uprBound;
-    DTYPE oldCentLwr = pointPtr->lwrBoundArr[centroidDataset[pointPtr->oldCentroid].groupNum];
-
-    for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-    {
-        
-        if(groupArr[grpIndex])
-        {
-            if(grpIndex == centroidDataset[pointPtr->oldCentroid].groupNum)
-            oldLwr = oldCentLwr + driftArr[grpIndex];
-            else
-            oldLwr = pointPtr->lwrBoundArr[grpIndex] + driftArr[grpIndex];
-                        
-            // set group's lower bound to find new lower bound for this iteration
-            pointPtr->lwrBoundArr[grpIndex] = INFINITY;
-
-            if(grpIndex == centroidDataset[pointPtr->oldCentroid].groupNum && pointPtr->oldCentroid != pointPtr->centroidIndex)
-            pointPtr->lwrBoundArr[centroidDataset[pointPtr->oldCentroid].groupNum] = oldCentUpr;
-
-            // loop through all of the group's centroids
-            for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-            {
-                if(clstIndex == pointPtr->oldCentroid)
-                continue;
-
-                if(centroidDataset[clstIndex].groupNum == grpIndex)
-                {
-                    // local filtering condition
-                    if(pointPtr->lwrBoundArr[grpIndex] < oldLwr  - centroidDataset[clstIndex].drift)
-                    continue;
-
-                    // perform distance calculation
-                    compDistance = calcDisCPU(pointPtr->vec,
-                                              centroidDataset[clstIndex].vec,
-                                              NDIM);
-                    count++;
-
-                    if(compDistance < pointPtr->uprBound)
-                    {
-                        pointPtr->lwrBoundArr[centroidDataset[pointPtr->centroidIndex].groupNum] = pointPtr->uprBound;
-                        pointPtr->uprBound = compDistance;
-                        pointPtr->centroidIndex = clstIndex;
-                    }
-                    else if(compDistance < pointPtr->lwrBoundArr[grpIndex])
-                    {
-                        pointPtr->lwrBoundArr[grpIndex] = compDistance;
-                    }
-                }
-            }
-        }
-        else
-        {
-            if(grpIndex == centroidDataset[pointPtr->oldCentroid].groupNum && pointPtr->oldCentroid != pointPtr->centroidIndex)
-            pointPtr->lwrBoundArr[centroidDataset[pointPtr->oldCentroid].groupNum] = oldCentUpr;
-        }
-    }
-    return count;
-}
-
-
-/*
-Uses more space but less branching
-*/
-unsigned long long int pointCalcsFullAltCount(point *pointPtr,
-                                              int *groupArr,
-                                              DTYPE *driftArr,
-                                              cent *centroidDataset)
-{
-    unsigned long long int count = 0;
-    unsigned int clstIndex, grpIndex;
-
-    DTYPE compDistance;
-    DTYPE oldLwrs[NGROUPCPU];
-
-    for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-    {
-        // if the group is not blocked by group filter
-        if(groupArr[grpIndex])
-        {
-            oldLwrs[grpIndex] = pointPtr->lwrBoundArr[grpIndex] + driftArr[grpIndex];
-
-            // reset the lwrBoundArr to be only new lwrBounds
-            pointPtr->lwrBoundArr[grpIndex] = INFINITY;
-        }
-    }
-
-    for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-    {
-        // if the centroid's group is marked in groupArr
-        if(groupArr[centroidDataset[clstIndex].groupNum])
-        {
-            // if it was the originally assigned cluster, no need to calc dist
-            if(clstIndex == pointPtr->oldCentroid)
-            continue;
-
-            if(pointPtr->lwrBoundArr[centroidDataset[clstIndex].groupNum] < oldLwrs[centroidDataset[clstIndex].groupNum] - centroidDataset[clstIndex].drift)
-            continue;
-            
-            // compute distance between point and centroid
-            compDistance = calcDisCPU(pointPtr->vec, 
-                                      centroidDataset[clstIndex].vec,
-                                      NDIM);
-            count++;
-            
-            if(compDistance < pointPtr->uprBound)
-            {
-                pointPtr->lwrBoundArr[centroidDataset[pointPtr->centroidIndex].groupNum] = pointPtr->uprBound;
-                pointPtr->centroidIndex = clstIndex;
-                pointPtr->uprBound = compDistance;
-            }
-            else if(compDistance < pointPtr->lwrBoundArr[centroidDataset[clstIndex].groupNum])
-            {   
-                pointPtr->lwrBoundArr[centroidDataset[clstIndex].groupNum] = compDistance;
-            }
-        }
-
-    }
-
-    return count;    
-}
-
-
-unsigned long long int pointCalcsSimpleCount(point *pointPtr,
-                                             int *groupArr,
-                                             DTYPE *driftArr,
-                                             cent *centroidDataset)
-{
-    unsigned long long int count = 0;
-    unsigned int clstIndex, grpIndex;
-
-    DTYPE compDistance;
-
-    for(grpIndex = 0; grpIndex < NGROUPCPU; grpIndex++)
-    {
-        // if the group is not blocked by group filter
-        if(groupArr[grpIndex])
-        {
-            // reset the lwrBoundArr to be only new lwrBounds
-            pointPtr->lwrBoundArr[grpIndex] = INFINITY;
-        }
-    }
-
-    for(clstIndex = 0; clstIndex < NCLUST; clstIndex++)
-    {
-        // if the centroid's group is marked in groupArr
-        if(groupArr[centroidDataset[clstIndex].groupNum])
-        {
-            // if it was the originally assigned cluster, no need to calc dist
-            if(clstIndex == pointPtr->oldCentroid)
-            continue;
-        
-            // compute distance between point and centroid
-            compDistance = calcDisCPU(pointPtr->vec, 
-                                      centroidDataset[clstIndex].vec,
-                                      NDIM);
-            count++;
-            if(compDistance < pointPtr->uprBound)
-            {
-                pointPtr->lwrBoundArr[centroidDataset[pointPtr->centroidIndex].groupNum] = pointPtr->uprBound;
-                pointPtr->centroidIndex = clstIndex;
-                pointPtr->uprBound = compDistance;
-            }
-            else if(compDistance < pointPtr->lwrBoundArr[centroidDataset[clstIndex].groupNum])
-            {
-                pointPtr->lwrBoundArr[centroidDataset[clstIndex].groupNum] = compDistance;
-            }
-        }
-
-    }
-    return count; 
-}
