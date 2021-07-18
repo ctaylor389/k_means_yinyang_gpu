@@ -251,7 +251,8 @@ int main(int argc, char *argv[])
       warmupGPU();
       runtime = 
         startSimpleOnGPU(pointInfo, centInfo, pointData, centData,
-                         numPnt, numCent, numGrp, numDim, maxIter, &ranIter);
+                         numPnt, numCent, numGrp, numDim, maxIter, numGPU, 
+                         &ranIter);
       break;
     case SUPERGPU:
       warmupGPU();

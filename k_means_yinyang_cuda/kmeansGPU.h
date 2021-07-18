@@ -35,6 +35,18 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                         const int maxIter,
                         unsigned int *ranIter);
 
+double startSimpleOnGPU(PointInfo *pointInfo,
+                        CentInfo *centInfo,
+                        DTYPE *pointData,
+                        DTYPE *centData,
+                        const int numPnt,
+                        const int numCent,
+                        const int numGrp,
+                        const int numDim,
+                        const int maxIter,
+                        const int numGPU,
+                        unsigned int *ranIter);
+
 double startSuperOnGPU(PointInfo *pointInfo,
                         CentInfo *centInfo,
                         DTYPE *pointData,

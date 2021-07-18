@@ -10,7 +10,7 @@ EXECUTABLE = kmeans
 
 LFLAGS = -Wall -std=c99 -pedantic -fopenmp $(DEBUG)
 
-FLAGS = -O3 -std=c++11 -Xcompiler -fopenmp -arch=compute_60 -code=sm_60 -lcuda -lineinfo
+FLAGS = -O3 -std=c++11 -Xcompiler -fopenmp -arch=compute_75 -code=sm_75 -lcuda -lineinfo
  
 CFLAGS = -c 
 
