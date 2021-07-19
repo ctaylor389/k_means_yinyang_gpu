@@ -636,7 +636,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       gpuErrchk(cudaSetDevice(i));
-      printf("    **Running clearDriftArr on GPU %d\n", i);
       clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr[i], numGrp);
       
     }
@@ -647,7 +646,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       gpuErrchk(cudaSetDevice(i));
-      printf("    **Running calcCentData on GPU %d\n", i);
       calcCentData<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo[i],devCentInfo[i],
                                          devPointData[i],devOldCentSum[i],
                                          devNewCentSum[i],devOldCentCount[i],
@@ -660,7 +658,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       gpuErrchk(cudaSetDevice(i));
-      printf("    **Running calcNewCentroids on GPU %d\n", i);
       calcNewCentroids<<<NBLOCKS,BLOCKSIZE,oldPosSize>>>(devPointInfo[i],
                                                          devCentInfo[i],
                                                          devCentData[i],
@@ -677,7 +674,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       cudaSetDevice(i);
-      printf("    **GPU %d is waiting at the barrier\n", i);
       cudaDeviceSynchronize();
     }
 
@@ -685,7 +681,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       gpuErrchk(cudaSetDevice(i));
-      printf("    **Running assignPointsSimple on GPU %d\n", i);
       assignPointsSimple<<<NBLOCKS,BLOCKSIZE,grpLclSize>>>(devPointInfo[i],
                                                            devCentInfo[i],
                                                            devPointData[i],
@@ -701,7 +696,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       gpuErrchk(cudaSetDevice(i));
-      printf("  **Running checkConverge on GPU %d\n", i);
       checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo[i],
                                            devConFlagArr[i],
                                            numPnts[i]);
@@ -733,7 +727,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (int i = 0; i < numGPU; i++)
   {
     gpuErrchk(cudaSetDevice(i));
-    printf("    **Running final calcCentData on GPU %d\n", i);
     calcCentData<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo[i],devCentInfo[i],
                                         devPointData[i],devOldCentSum[i],
                                         devNewCentSum[i],devOldCentCount[i],
@@ -745,7 +738,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (int i = 0; i < numGPU; i++)
   {
     gpuErrchk(cudaSetDevice(i));
-    printf("    **Running final calcNewCent on GPU %d\n", i);
     calcNewCentroids<<<NBLOCKS,BLOCKSIZE,oldPosSize>>>(devPointInfo[i],
                                                        devCentInfo[i],
                                                        devCentData[i],
