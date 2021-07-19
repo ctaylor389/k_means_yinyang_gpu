@@ -501,7 +501,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     printf("    **Allocated %d DTYPE values (centroid data) on GPU %d\n", 
            numCent * numDim, i);
     gpuErrchk(cudaMemcpy(devCentData[i],
-                        centInfo, sizeof(DTYPE)*numCent*numDim,
+                        centData, sizeof(DTYPE)*numCent*numDim,
                         cudaMemcpyHostToDevice));
     printf("    **Copied %d DTYPE values (centroid data) onto GPU %d\n", 
            numPnts[i] * numDim, i);
