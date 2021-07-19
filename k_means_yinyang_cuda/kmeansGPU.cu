@@ -470,9 +470,10 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     printf("    **Allocated %d DTYPE values (lwr bounds) on GPU %d\n", 
            numPnts[i] * numGrp, i);
 
-    gpuErrchk(cudaMemcpy(devPointLwrs[i], pointLwrs+(i*numPnt/numGPU),
-                        sizeof(DTYPE)*numPnts[i]*numGrp,
-                        cudaMemcpyHostToDevice));
+    gpuErrchk(cudaMemcpy(devPointLwrs[i], 
+                         pointLwrs+((i*numPnt/numGPU) * numGrp),
+                         sizeof(DTYPE)*numPnts[i]*numGrp,
+                         cudaMemcpyHostToDevice));
     printf("    **Copied %d DTYPE values (lwr bounds) onto GPU %d\n", 
            numPnts[i] * numGrp, i);
   }
