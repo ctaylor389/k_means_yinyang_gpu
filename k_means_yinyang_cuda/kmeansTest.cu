@@ -10,9 +10,9 @@ int runValidationTests(ImpType impCode)
   
   TestError testResult;
   
-  printf("Testing with data at %s\n", SUSY_PATH);
-  testResult = testImpWithKeyImp(LLOYDGPU, impCode, SUSY_SIZE, 200, 20, 
-                                 SUSY_DIM, 500, 16, 1, 0.0001, SUSY_PATH);
+  printf("Testing with data at iono\n");
+  testResult = testImpWithKeyImp(LLOYDGPU, impCode, 1864620, 200, 20, 
+                                 2, 1, 16, 1, 0.0001, "/home/ctaylor/yinyangKmeans/data/synthetic/iono_20min_2Mpts_2D.txt");
   printErrorMessage(testResult);
   
   if(testResult != testSuccess)
@@ -120,6 +120,7 @@ TestError testImpWithKeyImp(ImpType keyImp,
                             DTYPE tolerance,
                             const char *filepath)
 {
+  printf("%s\n", filepath);
   double keyRuntime;
   double testRuntime;
   unsigned int keyRanIter;
@@ -157,7 +158,7 @@ TestError testImpWithKeyImp(ImpType keyImp,
       warmupGPU();
       printf("    *Starting Simplified GPU\n");
       keyRuntime = startSimpleOnGPU(keyPointInfo, keyCentInfo, pointData, keyCentData,
-                                    numPnt, numCent, numGrp, numDim, maxIter, &keyRanIter);
+                                    numPnt, numCent, numGrp, numDim, maxIter, numGPU, &keyRanIter);
       printf("    *Simplified GPU complete.\n");
       break;
     case SUPERGPU:
@@ -234,7 +235,7 @@ TestError testImpWithKeyImp(ImpType keyImp,
       warmupGPU();
       printf("    *Starting Simplified GPU\n");
       testRuntime = startSimpleOnGPU(testPointInfo, testCentInfo, pointData, testCentData,
-                                    numPnt, numCent, numGrp, numDim, maxIter, &testRanIter);
+                                    numPnt, numCent, numGrp, numDim, maxIter, numGPU, &testRanIter);
       printf("    *Simplified GPU complete.\n");
       break;
     case SUPERGPU:

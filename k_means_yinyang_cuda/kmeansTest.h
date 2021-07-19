@@ -86,6 +86,8 @@ TestError validateDataImport(const char *inputfname,
 #define MSD_SIZE 515345
 #define MSD_DIM 90
 
+
+
 #define SUSY_PATH "/data/real/SUSY_normalize_0_1.txt"
 #define SUSY_SIZE 5000000
 #define SUSY_DIM 18

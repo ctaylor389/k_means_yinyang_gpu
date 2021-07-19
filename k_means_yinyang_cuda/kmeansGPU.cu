@@ -396,7 +396,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     {
       numPnts[i] = numPnt / numGPU;
     }
-    printf("    & Allocated %d points to GPU %d\n", numPnt, i);
+    printf("    **Assigned %d points to GPU %d\n", numPnt, i);
     
   }
 
@@ -444,35 +444,36 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
     // alloc dataset to GPU
     gpuErrchk(cudaMalloc(&devPointInfo[i], sizeof(PointInfo)*(numPnts[i])));
-    printf("    & Allocated %d PointInfo Objects on GPU %d\n", numPnts[i], i);
+    printf("    **Allocated %d PointInfo Objects on GPU %d\n", numPnts[i], i);
 
     // copy input data to GPU
     gpuErrchk(cudaMemcpy(devPointInfo[i],
                          pointInfo+(i*numPnt/numGPU),
                          (numPnts[i])*sizeof(PointInfo),
                          cudaMemcpyHostToDevice));
-    printf("    & Copied %d PointInfo Objects onto GPU %d\n", numPnts[i], i);
+    printf("    **Copied %d PointInfo Objects onto GPU %d\n", numPnts[i], i);
 
-    gpuErrchk(cudaMalloc(&devPointData[i], sizeof(DTYPE) * numPnts[i] *
-                         numDim));
-    printf("    & Allocated %d DTYPE values on GPU %d\n", 
+    gpuErrchk(cudaMalloc(&devPointData[i], sizeof(DTYPE) * numPnts[i] * numDim));
+    printf("    **Allocated %d DTYPE values (point data) on GPU %d\n", 
            numPnts[i] * numDim, i);
 
-    gpuErrchk(cudaMemcpy(devPointData[i], pointData+(i*numPnt/numGPU),
+    // possible error here ???
+    gpuErrchk(cudaMemcpy(devPointData[i],
+                         pointData+((i*numPnt/numGPU) * numDim),
                          sizeof(DTYPE)*numPnts[i]*numDim,
                          cudaMemcpyHostToDevice));
-    printf("    & Copied %d DTYPE values onto GPU %d\n", 
+    printf("    **Copied %d DTYPE values (point data) onto GPU %d\n", 
            numPnts[i] * numDim, i);
 
     gpuErrchk(cudaMalloc(&devPointLwrs[i], sizeof(DTYPE) * numPnts[i] *
                          numGrp));
-    printf("    & Allocated %d DTYPE values (lwr bounds) on GPU %d\n", 
+    printf("    **Allocated %d DTYPE values (lwr bounds) on GPU %d\n", 
            numPnts[i] * numGrp, i);
 
     gpuErrchk(cudaMemcpy(devPointLwrs[i], pointLwrs+(i*numPnt/numGPU),
                         sizeof(DTYPE)*numPnts[i]*numGrp,
                         cudaMemcpyHostToDevice));
-    printf("    & Copied %d DTYPE values (lwr bounds) onto GPU %d\n", 
+    printf("    **Copied %d DTYPE values (lwr bounds) onto GPU %d\n", 
            numPnts[i] * numGrp, i);
   }
 
@@ -487,21 +488,21 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
     // alloc dataset and drift array to GPU
     gpuErrchk(cudaMalloc(&devCentInfo[i], sizeof(CentInfo)*numCent));
-    printf("    & Allocated %d CentInfo Objects on GPU %d\n", numCent, i);
+    printf("    **Allocated %d CentInfo Objects on GPU %d\n", numCent, i);
 
     // copy input data to GPU
     gpuErrchk(cudaMemcpy(devCentInfo[i],
                          centInfo, sizeof(CentInfo)*numCent,
                          cudaMemcpyHostToDevice));
-    printf("    & Copied %d CentInfo Objects onto GPU %d\n", numCent, i);
+    printf("    **Copied %d CentInfo Objects onto GPU %d\n", numCent, i);
 
     gpuErrchk(cudaMalloc(&devCentData[i], sizeof(DTYPE)*numCent*numDim));
-    printf("    & Allocated %d DTYPE values on GPU %d\n", 
+    printf("    **Allocated %d DTYPE values (centroid data) on GPU %d\n", 
            numCent * numDim, i);
     gpuErrchk(cudaMemcpy(devCentData[i],
                         centInfo, sizeof(DTYPE)*numCent*numDim,
                         cudaMemcpyHostToDevice));
-    printf("    & Copied %d DTYPE values onto GPU %d\n", 
+    printf("    **Copied %d DTYPE values (centroid data) onto GPU %d\n", 
            numPnts[i] * numDim, i);
   }
 
@@ -511,7 +512,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(cudaSetDevice(i));
     cudaMalloc(&devMaxDriftArr[i], sizeof(DTYPE) * numGrp);
-    printf("    & Allocated %d DTYPE values on GPU %d\n", 
+    printf("    **Allocated %d DTYPE values (max drift array) on GPU %d\n", 
            numGrp, i);
   }
 
@@ -522,7 +523,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(cudaSetDevice(i));
     cudaMalloc(&devNewCentSum[i], sizeof(DTYPE) * numCent * numDim);
-    printf("    & Allocated %d DTYPE values on GPU %d\n", 
+    printf("    **Allocated %d DTYPE values (new centroid sums) on GPU %d\n", 
            numCent * numDim, i);
   }
 
@@ -532,7 +533,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(cudaSetDevice(i));
     cudaMalloc(&devOldCentSum[i], sizeof(DTYPE) * numCent * numDim);
-    printf("    & Allocated %d DTYPE values on GPU %d\n", 
+    printf("    **Allocated %d DTYPE values (old centroid sums) on GPU %d\n", 
            numCent * numDim, i);
   }
 
@@ -542,7 +543,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(cudaSetDevice(i));
     cudaMalloc(&devNewCentCount[i], sizeof(unsigned int) * numCent);
-    printf("    & Allocated %d unsigned int values on GPU %d\n", numCent, i);
+    printf("    **Allocated %d unsigned int values (new centroid count) on GPU %d\n", numCent, i);
   }
 
   unsigned int *devOldCentCount[numGPU];
@@ -551,7 +552,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(cudaSetDevice(i));
     cudaMalloc(&devOldCentCount[i], sizeof(unsigned int) * numCent);
-    printf("    & Allocated %d unsigned int values on GPU %d\n", numCent, i);
+    printf("    **Allocated %d unsigned int values (old centroid count) on GPU %d\n", numCent, i);
   }
 
   unsigned int *devConFlagArr[numGPU];
@@ -569,7 +570,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (int i = 0; i < numGPU; i++)
   {
     gpuErrchk(cudaSetDevice(i));
-    printf("Running clearCentCalcData on GPU %d\n", i);
+    printf("    **Running clearCentCalcData on GPU %d\n", i);
     clearCentCalcData<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum[i],
                                               devOldCentSum[i],
                                               devNewCentCount[i],
@@ -583,7 +584,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (int i = 0; i < numGPU; i++)
   {
     gpuErrchk(cudaSetDevice(i));
-    printf("Running clearDriftArr on GPU %d\n", i);
+    printf("    **Running clearDriftArr on GPU %d\n", i);
     clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr[i], numGrp);
     
   }
@@ -592,7 +593,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (int i = 0; i < numGPU; i++)
   {
     gpuErrchk(cudaSetDevice(i));
-    printf("Running initRunKernel on GPU %d\n", i);
+    printf("    **Running initRunKernel on GPU %d\n", i);
     // do single run of naive kmeans for initial centroid assignments
     initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo[i],
                                          devCentInfo[i],
@@ -603,7 +604,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                          numCent,
                                          numGrp,
                                          numDim);
-    
   }
 
 
@@ -635,7 +635,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       gpuErrchk(cudaSetDevice(i));
-      printf("Running clearDriftArr on GPU %d\n", i);
+      printf("    **Running clearDriftArr on GPU %d\n", i);
       clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr[i], numGrp);
       
     }
@@ -646,7 +646,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       gpuErrchk(cudaSetDevice(i));
-      printf("Running calcCentData on GPU %d\n", i);
+      printf("    **Running calcCentData on GPU %d\n", i);
       calcCentData<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo[i],devCentInfo[i],
                                          devPointData[i],devOldCentSum[i],
                                          devNewCentSum[i],devOldCentCount[i],
@@ -659,7 +659,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       gpuErrchk(cudaSetDevice(i));
-      printf("Running calcNewCentroids on GPU %d\n", i);
+      printf("    **Running calcNewCentroids on GPU %d\n", i);
       calcNewCentroids<<<NBLOCKS,BLOCKSIZE,oldPosSize>>>(devPointInfo[i],
                                                          devCentInfo[i],
                                                          devCentData[i],
@@ -676,7 +676,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       cudaSetDevice(i);
-      printf("GPU %d is waiting at the barrier\n", i);
+      printf("    **GPU %d is waiting at the barrier\n", i);
       cudaDeviceSynchronize();
     }
 
@@ -684,7 +684,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       gpuErrchk(cudaSetDevice(i));
-      printf("Running assignPointsSimple on GPU %d\n", i);
+      printf("    **Running assignPointsSimple on GPU %d\n", i);
       assignPointsSimple<<<NBLOCKS,BLOCKSIZE,grpLclSize>>>(devPointInfo[i],
                                                            devCentInfo[i],
                                                            devPointData[i],
@@ -700,7 +700,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       gpuErrchk(cudaSetDevice(i));
-      printf("Running checkConverge on GPU %d\n", i);
+      printf("  **Running checkConverge on GPU %d\n", i);
       checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo[i],
                                            devConFlagArr[i],
                                            numPnts[i]);
@@ -732,7 +732,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (int i = 0; i < numGPU; i++)
   {
     gpuErrchk(cudaSetDevice(i));
-    printf("Running final calcCentData on GPU %d\n", i);
+    printf("    **Running final calcCentData on GPU %d\n", i);
     calcCentData<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo[i],devCentInfo[i],
                                         devPointData[i],devOldCentSum[i],
                                         devNewCentSum[i],devOldCentCount[i],
@@ -744,7 +744,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (int i = 0; i < numGPU; i++)
   {
     gpuErrchk(cudaSetDevice(i));
-    printf("Running final calcNewCent on GPU %d\n", i);
+    printf("    **Running final calcNewCent on GPU %d\n", i);
     calcNewCentroids<<<NBLOCKS,BLOCKSIZE,oldPosSize>>>(devPointInfo[i],
                                                        devCentInfo[i],
                                                        devCentData[i],
@@ -777,7 +777,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   // clean up, return
   for (int i = 0; i < numGPU; i++)
   {
-    printf("Freeing data on GPU %d\n", i);
+    printf("    **Freeing data on GPU %d\n", i);
     cudaFree(devPointInfo[i]);
     cudaFree(devPointData[i]);
     cudaFree(devPointLwrs[i]);
