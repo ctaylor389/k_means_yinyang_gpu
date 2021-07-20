@@ -14,15 +14,15 @@ inline void gpuAssert(cudaError_t code, const char *file, int line, bool abort=t
 // Host functions for calling CUDA kernels //
 /////////////////////////////////////////////
 
-double startFullOnGPU(PointInfo *pointInfo, 
-                    CentInfo *centInfo, 
+double startFullOnGPU(PointInfo *pointInfo,
+                    CentInfo *centInfo,
                     DTYPE *pointData,
-                    DTYPE *centData, 
-                    const int numPnt, 
+                    DTYPE *centData,
+                    const int numPnt,
                     const int numCent,
-                    const int numGrp, 
-                    const int numDim, 
-                    const int maxIter, 
+                    const int numGrp,
+                    const int numDim,
+                    const int maxIter,
                     unsigned int *ranIter)
 {
 
@@ -37,14 +37,14 @@ double startFullOnGPU(PointInfo *pointInfo,
   unsigned int *hostConFlagPtr = &hostConFlag;
   int grpLclSize = sizeof(unsigned int)*numGrp*BLOCKSIZE;
   int oldPosSize = sizeof(DTYPE)*numDim*BLOCKSIZE;
-  
+
   int index = 1;
 
   unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
 
   // group centroids
   groupCent(centInfo, centData, numCent, numGrp, numDim);
-  
+
   // create lower bound data on host
   DTYPE *pointLwrs = (DTYPE *)malloc(sizeof(DTYPE) * numPnt * numGrp);
   for(int i = 0; i < numPnt * numGrp; i++)
@@ -64,7 +64,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   // store centroids on device
   CentInfo *devCentInfo;
   DTYPE *devCentData;
-  
+
   devCentInfo = storeCentInfoOnGPU(centInfo, numCent);
   devCentData = storeDataOnGPU(centData, numCent, numDim);
 
@@ -88,7 +88,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   unsigned int *devConFlag = NULL;
   cudaMalloc(&devConFlag, sizeof(unsigned int));
 
-  gpuErrchk(cudaMemcpy(devConFlag, hostConFlagPtr, 
+  gpuErrchk(cudaMemcpy(devConFlag, hostConFlagPtr,
                         sizeof(unsigned int),cudaMemcpyHostToDevice));
 
 
@@ -102,7 +102,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr, numGrp);
 
   // do single run of naive kmeans for initial centroid assignments
-  initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo, 
+  initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo,
                                        devCentInfo,
                                        devPointData,
                                        devPointLwrs,
@@ -111,14 +111,14 @@ double startFullOnGPU(PointInfo *pointInfo,
                                        numCent,
                                        numGrp,
                                        numDim);
-  
+
 
   // loop until convergence
   while(hostConFlag && index < maxIter)
   {
     hostConFlag = 0;
-    
-    gpuErrchk(cudaMemcpy(devConFlag,hostConFlagPtr, 
+
+    gpuErrchk(cudaMemcpy(devConFlag,hostConFlagPtr,
                            sizeof(unsigned int),cudaMemcpyHostToDevice));
 
     // clear maintained data on device
@@ -160,7 +160,7 @@ double startFullOnGPU(PointInfo *pointInfo,
                                                        devNewCentSum,devMaxDriftArr,
                                                        devOldCentCount,devNewCentCount,
                                                        numCent,numDim);
-  
+
   cudaDeviceSynchronize();
 
   // only need the point info for assignments
@@ -182,9 +182,9 @@ double startFullOnGPU(PointInfo *pointInfo,
   cudaFree(devNewCentCount);
   cudaFree(devOldCentCount);
   cudaFree(devConFlag);
-  
+
   free(pointLwrs);
-  
+
   endTime = omp_get_wtime();
   return endTime - startTime;
 }
@@ -213,7 +213,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   unsigned int *hostConFlagPtr = &hostConFlag;
   int grpLclSize = sizeof(unsigned int)*numGrp*BLOCKSIZE;
   int oldPosSize = sizeof(DTYPE)*numDim*BLOCKSIZE;
-  
+
   int index = 1;
 
   unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
@@ -221,7 +221,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
   // group centroids
   groupCent(centInfo, centData, numCent, numGrp, numDim);
-  
+
   // create lower bound data on host
   DTYPE *pointLwrs = (DTYPE *)malloc(sizeof(DTYPE) * numPnt * numGrp);
   for(int i = 0; i < numPnt * numGrp; i++)
@@ -241,7 +241,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   // store centroids on device
   CentInfo *devCentInfo;
   DTYPE *devCentData;
-  
+
   devCentInfo = storeCentInfoOnGPU(centInfo, numCent);
   devCentData = storeDataOnGPU(centData, numCent, numDim);
 
@@ -277,7 +277,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr, numGrp);
 
   // do single run of naive kmeans for initial centroid assignments
-  initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo, 
+  initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo,
                                        devCentInfo,
                                        devPointData,
                                        devPointLwrs,
@@ -291,8 +291,8 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   while(hostConFlag && index < maxIter)
   {
     hostConFlag = 0;
-    
-    gpuErrchk(cudaMemcpy(devConFlag,hostConFlagPtr, 
+
+    gpuErrchk(cudaMemcpy(devConFlag,hostConFlagPtr,
                            sizeof(unsigned int),cudaMemcpyHostToDevice));
 
     // clear maintained data on device
@@ -311,7 +311,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                                          devNewCentSum,devMaxDriftArr,
                                                          devOldCentCount,devNewCentCount,
                                                          numCent,numDim);
-    
+
     assignPointsSimple<<<NBLOCKS, BLOCKSIZE, grpLclSize>>>(devPointInfo,devCentInfo,
                                                            devPointData,devPointLwrs,
                                                            devCentData,devMaxDriftArr,
@@ -321,7 +321,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                          devConFlag,
                                          numPnt);
     index++;
-    gpuErrchk(cudaMemcpy(hostConFlagPtr, devConFlag, 
+    gpuErrchk(cudaMemcpy(hostConFlagPtr, devConFlag,
                            sizeof(unsigned int), cudaMemcpyDeviceToHost));
   }
   calcCentData<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,devCentInfo,
@@ -335,7 +335,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                                        devNewCentSum,devMaxDriftArr,
                                                        devOldCentCount,devNewCentCount,
                                                        numCent,numDim);
-  
+
   cudaDeviceSynchronize();
 
   // only need the point info for assignments
@@ -359,9 +359,9 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   cudaFree(devNewCentCount);
   cudaFree(devOldCentCount);
   cudaFree(devConFlag);
-  
+
   free(pointLwrs);
-  
+
   endTime = omp_get_wtime();
   return endTime - startTime;
 }
@@ -396,8 +396,8 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     {
       numPnts[i] = numPnt / numGPU;
     }
-    printf("    **Assigned %d points to GPU %d\n", numPnt, i);
-    
+    printf("    **Assigned %d points to GPU %d\n", numPnts[i], i);
+
   }
 
   // variable initialization
@@ -454,7 +454,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     printf("    **Copied %d PointInfo Objects onto GPU %d\n", numPnts[i], i);
 
     gpuErrchk(cudaMalloc(&devPointData[i], sizeof(DTYPE) * numPnts[i] * numDim));
-    printf("    **Allocated %d DTYPE values (point data) on GPU %d\n", 
+    printf("    **Allocated %d DTYPE values (point data) on GPU %d\n",
            numPnts[i] * numDim, i);
 
     // possible error here ???
@@ -462,19 +462,19 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                          pointData+((i*numPnt/numGPU) * numDim),
                          sizeof(DTYPE)*numPnts[i]*numDim,
                          cudaMemcpyHostToDevice));
-    printf("    **Copied %d DTYPE values (point data) onto GPU %d\n", 
+    printf("    **Copied %d DTYPE values (point data) onto GPU %d\n",
            numPnts[i] * numDim, i);
 
     gpuErrchk(cudaMalloc(&devPointLwrs[i], sizeof(DTYPE) * numPnts[i] *
                          numGrp));
-    printf("    **Allocated %d DTYPE values (lwr bounds) on GPU %d\n", 
+    printf("    **Allocated %d DTYPE values (lwr bounds) on GPU %d\n",
            numPnts[i] * numGrp, i);
 
-    gpuErrchk(cudaMemcpy(devPointLwrs[i], 
+    gpuErrchk(cudaMemcpy(devPointLwrs[i],
                          pointLwrs+((i*numPnt/numGPU) * numGrp),
                          sizeof(DTYPE)*numPnts[i]*numGrp,
                          cudaMemcpyHostToDevice));
-    printf("    **Copied %d DTYPE values (lwr bounds) onto GPU %d\n", 
+    printf("    **Copied %d DTYPE values (lwr bounds) onto GPU %d\n",
            numPnts[i] * numGrp, i);
   }
 
@@ -498,12 +498,12 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     printf("    **Copied %d CentInfo Objects onto GPU %d\n", numCent, i);
 
     gpuErrchk(cudaMalloc(&devCentData[i], sizeof(DTYPE)*numCent*numDim));
-    printf("    **Allocated %d DTYPE values (centroid data) on GPU %d\n", 
+    printf("    **Allocated %d DTYPE values (centroid data) on GPU %d\n",
            numCent * numDim, i);
     gpuErrchk(cudaMemcpy(devCentData[i],
                         centData, sizeof(DTYPE)*numCent*numDim,
                         cudaMemcpyHostToDevice));
-    printf("    **Copied %d DTYPE values (centroid data) onto GPU %d\n", 
+    printf("    **Copied %d DTYPE values (centroid data) onto GPU %d\n",
            numPnts[i] * numDim, i);
   }
 
@@ -513,7 +513,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(cudaSetDevice(i));
     cudaMalloc(&devMaxDriftArr[i], sizeof(DTYPE) * numGrp);
-    printf("    **Allocated %d DTYPE values (max drift array) on GPU %d\n", 
+    printf("    **Allocated %d DTYPE values (max drift array) on GPU %d\n",
            numGrp, i);
   }
 
@@ -524,7 +524,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(cudaSetDevice(i));
     cudaMalloc(&devNewCentSum[i], sizeof(DTYPE) * numCent * numDim);
-    printf("    **Allocated %d DTYPE values (new centroid sums) on GPU %d\n", 
+    printf("    **Allocated %d DTYPE values (new centroid sums) on GPU %d\n",
            numCent * numDim, i);
   }
 
@@ -534,7 +534,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(cudaSetDevice(i));
     cudaMalloc(&devOldCentSum[i], sizeof(DTYPE) * numCent * numDim);
-    printf("    **Allocated %d DTYPE values (old centroid sums) on GPU %d\n", 
+    printf("    **Allocated %d DTYPE values (old centroid sums) on GPU %d\n",
            numCent * numDim, i);
   }
 
@@ -578,7 +578,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                               devOldCentCount[i],
                                               numCent,
                                               numDim);
-    
+
   }
 
   #pragma omp parallel for num_threads(numGPU)
@@ -587,7 +587,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     gpuErrchk(cudaSetDevice(i));
     printf("    **Running clearDriftArr on GPU %d\n", i);
     clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr[i], numGrp);
-    
+
   }
 
   #pragma omp parallel for num_threads(numGPU)
@@ -607,6 +607,57 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                          numDim);
   }
 
+  /*
+  CentInfo *allCentInfo[numGPU];
+  for (int i = 0; i < numGPU; i++)
+  {
+    allCentInfo[i] = (CentInfo *)malloc(sizeof(CentInfo) * numCent);
+  }
+
+  DTYPE *allCentData[numGPU];
+  for (int i = 0; i < numGPU; i++)
+  {
+    allCentData[i] = (DTYPE *)malloc(sizeof(DTYPE) * numCent * numDim);
+  }
+  */
+
+  CentInfo **allCentInfo = (CentInfo **)malloc(sizeof(CentInfo*)*numGPU);
+  for (int i = 0; i < numGPU; i++)
+  {
+      allCentInfo[i] = (CentInfo *)malloc(sizeof(CentInfo)*numCent);
+  }
+
+  DTYPE **allCentData = (DTYPE **)malloc(sizeof(DTYPE*)*numGPU);
+  for (int i = 0; i < numGPU; i++)
+  {
+      allCentData[i] = (DTYPE *)malloc(sizeof(DTYPE)*numCent*numDim);
+  }
+
+  CentInfo *newCentInfo = (CentInfo *)malloc(sizeof(CentInfo) * numCent);
+
+  DTYPE *newCentData = (DTYPE *)malloc(sizeof(DTYPE) * numCent * numDim);
+  for (int i = 0; i < numCent; i++)
+  {
+    for (int j = 0; j < numDim; j++)
+    {
+      newCentData[(i * numDim) + j] = 0;
+    }
+  }
+
+  DTYPE *oldCentData = (DTYPE *)malloc(sizeof(DTYPE) * numCent * numDim);
+
+  DTYPE **hostMaxDriftArrs;
+  hostMaxDriftArrs = (DTYPE **)malloc(sizeof(DTYPE*)*numGPU);
+  for (int i = 0; i < numGPU; i++)
+  {
+      hostMaxDriftArrs[i] = (DTYPE *)malloc(sizeof(DTYPE)*numGrp);
+  }
+
+  DTYPE *newMaxDriftArr;
+  newMaxDriftArr=(DTYPE *)malloc(sizeof(DTYPE)*numGrp);
+
+  DTYPE *maxDrifts;
+  maxDrifts=(DTYPE *)malloc(sizeof(DTYPE)*numGPU);
 
 
   unsigned int doesNotConverge = 1;
@@ -615,6 +666,11 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   while(doesNotConverge && index < maxIter)
   {
     doesNotConverge = 0;
+
+    for (int i = 0; i < numCent; i++)
+    {
+        newCentInfo[i].count = 0;
+    }
 
     #pragma omp parallel for num_threads(numGPU)
     for (int i = 0; i < numGPU; i++)
@@ -637,7 +693,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     {
       gpuErrchk(cudaSetDevice(i));
       clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr[i], numGrp);
-      
+
     }
 
 
@@ -650,7 +706,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                          devPointData[i],devOldCentSum[i],
                                          devNewCentSum[i],devOldCentCount[i],
                                          devNewCentCount[i],numPnts[i],numDim);
-      
+
     }
 
     // make new centroids
@@ -667,7 +723,74 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                                          devOldCentCount[i],
                                                          devNewCentCount[i],
                                                          numCent,numDim);
-      
+
+    }
+
+    if (numGPU > 1)
+    {
+      #pragma omp parallel for num_threads(numGPU)
+      for (int i = 0; i < numGPU; i++)
+      {
+        gpuErrchk(cudaSetDevice(i));
+        gpuErrchk(cudaMemcpy(allCentInfo[i],
+                            devCentInfo[i], sizeof(CentInfo)*numCent,
+                            cudaMemcpyDeviceToHost));
+      }
+
+      #pragma omp parallel for num_threads(numGPU)
+      for (int i = 0; i < numGPU; i++)
+      {
+        gpuErrchk(cudaSetDevice(i));
+        gpuErrchk(cudaMemcpy(allCentData[i],
+                            devCentData[i], sizeof(DTYPE)*numCent*numDim,
+                            cudaMemcpyDeviceToHost));
+      }
+
+      calcWeightedMeans(newCentInfo, allCentInfo, newCentData, oldCentData,
+        allCentData, numCent, numGrp, numDim, numGPU);
+
+      #pragma omp parallel for num_threads(numGPU)
+      for (int i = 0; i < numGPU; i++)
+      {
+          gpuErrchk(cudaSetDevice(i));
+
+          // copy input data to GPU
+          gpuErrchk(cudaMemcpy(devCentInfo[i],
+                      newCentInfo, sizeof(cent)*numCent,
+                                  cudaMemcpyHostToDevice));
+      }
+
+      #pragma omp parallel for num_threads(numGPU)
+      for (int i = 0; i < numGPU; i++)
+      {
+          gpuErrchk(cudaSetDevice(i));
+
+          // copy input data to GPU
+          gpuErrchk(cudaMemcpy(devCentData[i],
+                      newCentData, sizeof(DTYPE)*numCent*numDim,
+                                  cudaMemcpyHostToDevice));
+      }
+
+      #pragma omp parallel for num_threads(numGPU)
+      for (int i = 0; i < numGPU; i++)
+      {
+          gpuErrchk(cudaSetDevice(i));
+          gpuErrchk(cudaMemcpy(hostMaxDriftArrs[i],
+                      devMaxDriftArr[i], numGrp*sizeof(DTYPE),
+                                  cudaMemcpyDeviceToHost));
+      }
+
+      calcNewMaxDrift(maxDrifts, newMaxDriftArr, hostMaxDriftArrs, numGrp,
+        numGPU);
+
+      #pragma omp parallel for num_threads(numGPU)
+      for (int i = 0; i < numGPU; i++)
+      {
+          gpuErrchk(cudaSetDevice(i));
+          gpuErrchk(cudaMemcpy(devMaxDriftArr[i],
+                       newMaxDriftArr, numGrp*sizeof(DTYPE),
+                                  cudaMemcpyHostToDevice));
+      }
     }
 
     #pragma omp parallel for num_threads(numGPU)
@@ -689,7 +812,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                                            devMaxDriftArr[i],
                                                            numPnts[i],numCent,
                                                            numGrp,numDim);
-      
+
     }
 
     #pragma omp parallel for num_threads(numGPU)
@@ -699,7 +822,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
       checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo[i],
                                            devConFlagArr[i],
                                            numPnts[i]);
-      
+
     }
 
     index++;
@@ -749,21 +872,67 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                                        numCent,numDim);
   }
 
+  if (numGPU > 1)
+  {
+    #pragma omp parallel for num_threads(numGPU)
+    for (int i = 0; i < numGPU; i++)
+    {
+      gpuErrchk(cudaSetDevice(i));
+      gpuErrchk(cudaMemcpy(allCentInfo[i],
+                          devCentInfo[i], sizeof(CentInfo)*numCent,
+                          cudaMemcpyDeviceToHost));
+    }
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (int i = 0; i < numGPU; i++)
+    {
+      gpuErrchk(cudaSetDevice(i));
+      gpuErrchk(cudaMemcpy(allCentData[i],
+                          devCentData[i], sizeof(DTYPE)*numCent*numDim,
+                          cudaMemcpyDeviceToHost));
+    }
+
+    calcWeightedMeans(newCentInfo, allCentInfo, newCentData, oldCentData,
+      allCentData, numCent, numGrp, numDim, numGPU);
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (int i = 0; i < numGPU; i++)
+    {
+        gpuErrchk(cudaSetDevice(i));
+
+        // copy input data to GPU
+        gpuErrchk(cudaMemcpy(devCentInfo[i],
+                    newCentInfo, sizeof(cent)*numCent,
+                                cudaMemcpyHostToDevice));
+    }
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (int i = 0; i < numGPU; i++)
+    {
+        gpuErrchk(cudaSetDevice(i));
+
+        // copy input data to GPU
+        gpuErrchk(cudaMemcpy(devCentData[i],
+                    newCentData, sizeof(DTYPE)*numCent*numDim,
+                                cudaMemcpyHostToDevice));
+    }
+  }
+
   cudaDeviceSynchronize();
 
   #pragma omp parallel for num_threads(numGPU)
   for (int i = 0; i < numGPU; i++)
   {
     gpuErrchk(cudaSetDevice(i));
-    
+
     // copy finished clusters and points from device to host
     gpuErrchk(cudaMemcpy(pointInfo+((i*numPnt/numGPU)),
                 devPointInfo[i], sizeof(PointInfo)*numPnts[i], cudaMemcpyDeviceToHost));
   }
 
   // and the final centroid positions
-  gpuErrchk(cudaMemcpy(centData,devCentData[0],
-                       sizeof(DTYPE)*numDim*numCent,cudaMemcpyDeviceToHost));
+  gpuErrchk(cudaMemcpy(centData, devCentData[0],
+                       sizeof(DTYPE)*numCent*numDim,cudaMemcpyDeviceToHost));
 
   *ranIter = index;
 
@@ -784,16 +953,121 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     cudaFree(devConFlagArr[i]);
   }
 
-
+  free(allCentInfo);
+  free(allCentData);
+  free(newCentInfo);
+  free(newCentData);
+  free(oldCentData);
   free(pointLwrs);
 
   endTime = omp_get_wtime();
   return endTime - startTime;
 }
 
+void calcNewMaxDrift(DTYPE *maxDrifts,
+                DTYPE *newMaxDriftArr,
+                DTYPE **hostMaxDriftArrs,
+                const int numGrp,
+                const int numGPU)
+{
+    DTYPE max;
+    for (int i = 0; i < numGrp; i++)
+    {
+        for (int j = 0; j < numGPU; j++)
+        {
+            maxDrifts[j] = hostMaxDriftArrs[j][i];
+        }
+
+        max = maxDrifts[0];
+
+        for (int k = 1; k < numGPU; k++)
+        {
+            if (maxDrifts[k] > max)
+            {
+                max = maxDrifts[k];
+            }
+        }
+
+        newMaxDriftArr[i] = max;
+    }
+}
+
+void calcWeightedMeans(CentInfo *newCentInfo,
+                       CentInfo **allCentInfo,
+                       DTYPE *newCentData,
+                       DTYPE *oldCentData,
+                       DTYPE **allCentData,
+                       const int numCent,
+                       const int numGrp,
+                       const int numDim,
+                       const int numGPU)
+{
+  DTYPE numerator = 0;
+  DTYPE denominator = 0;
+  int zeroCount = 0;
+  int zeroNumerator = 0;
+
+  for (int i = 0; i < numCent; i++)
+  {
+      for (int j = 0; j < numDim; j++)
+      {
+          oldCentData[(i * numDim) + j] = newCentData[(i * numDim) + j];
+      }
+  }
+
+  for (int i = 0; i < numGPU; i++)
+  {
+      for (int j = 0; j < numCent; j++)
+      {
+        newCentInfo[j].count += allCentInfo[i][j].count;
+
+        newCentInfo[j].groupNum = allCentInfo[0][j].groupNum;
+      }
+  }
+
+  for (int j = 0; j < numCent; j++)
+  {
+      for (int k = 0; k < numDim; k++)
+      {
+          for (int l = 0; l < numGPU; l++)
+          {
+              if (allCentInfo[l][j].count == 0)
+              {
+                  zeroCount++;
+                  zeroNumerator += allCentData[l][(j * numDim) + k];
+              }
+
+              numerator +=
+              allCentData[l][(j * numDim) + k]*allCentInfo[l][j].count;
+
+              denominator += allCentInfo[l][j].count;
+          }
+
+          if (denominator != 0)
+          {
+              newCentData[(j * numDim) + k] = numerator/denominator;
+          }
+
+          else
+          {
+              newCentData[(j * numDim) + k] = zeroNumerator/zeroCount;
+          }
+
+          zeroCount = 0;
+          zeroNumerator = 0;
+          numerator = 0;
+          denominator = 0;
+      }
+
+      newCentInfo[j].drift = calcDisCPU(&newCentData[j*numDim],
+                                           &oldCentData[j*numDim],
+                                           numDim);
+  }
+}
+
 double startSuperOnGPU(PointInfo *pointInfo,
                      CentInfo *centInfo,
-                     DTYPE *pointData, 
+                     DTYPE *pointData,
                      DTYPE *centData,
                      const int numPnt,
                      const int numCent,
@@ -812,7 +1086,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
 
   unsigned int *hostConFlagPtr = &hostConFlag;
   int oldPosSize = sizeof(DTYPE)*numDim*BLOCKSIZE;
-  
+
   int index = 1;
 
   unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
@@ -823,7 +1097,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   {
     centInfo[j].groupNum = 0;
   }
-  
+
   // create lower bound data on host
   DTYPE *pointLwrs = (DTYPE *)malloc(sizeof(DTYPE) * numPnt);
   for(int i = 0; i < numPnt; i++)
@@ -843,7 +1117,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   // store centroids on device
   CentInfo *devCentInfo;
   DTYPE *devCentData;
-  
+
   devCentInfo = storeCentInfoOnGPU(centInfo, numCent);
   devCentData = storeDataOnGPU(centData, numCent, numDim);
 
@@ -880,7 +1154,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDrift, 1);
 
   // do single run of naive kmeans for initial centroid assignments
-  initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo, 
+  initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo,
                                        devCentInfo,
                                        devPointData,
                                        devPointLwrs,
@@ -889,13 +1163,13 @@ double startSuperOnGPU(PointInfo *pointInfo,
                                        numCent,
                                        1,
                                        numDim);
-  
+
 
   // loop until convergence
   while(hostConFlag && index < maxIter)
   {
     hostConFlag = 0;
-    
+
     gpuErrchk(cudaMemcpy(devConFlag, hostConFlagPtr,
                            sizeof(unsigned int), cudaMemcpyHostToDevice));
 
@@ -914,7 +1188,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
                                                          devNewCentSum,devMaxDrift,
                                                          devOldCentCount,devNewCentCount,
                                                          numCent,numDim);
-    
+
     assignPointsSuper<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,devCentInfo,
                                               devPointData,devPointLwrs,
                                               devCentData,devMaxDrift,
@@ -938,7 +1212,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
                                                        devNewCentSum,devMaxDrift,
                                                        devOldCentCount,devNewCentCount,
                                                        numCent,numDim);
-  
+
   cudaDeviceSynchronize();
 
   // only need the point info for assignments
@@ -962,16 +1236,16 @@ double startSuperOnGPU(PointInfo *pointInfo,
   cudaFree(devNewCentCount);
   cudaFree(devOldCentCount);
   cudaFree(devConFlag);
-  
+
   free(pointLwrs);
-  
+
   endTime = omp_get_wtime();
   return endTime - startTime;
 }
 
 double startLloydOnGPU(PointInfo *pointInfo,
                      CentInfo *centInfo,
-                     DTYPE *pointData, 
+                     DTYPE *pointData,
                      DTYPE *centData,
                      const int numPnt,
                      const int numCent,
@@ -1004,7 +1278,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
   // store centroids on device
   CentInfo *devCentInfo;
   DTYPE *devCentData;
-  
+
   devCentInfo = storeCentInfoOnGPU(centInfo, numCent);
   devCentData = storeDataOnGPU(centData, numCent, numDim);
 
@@ -1032,10 +1306,10 @@ double startLloydOnGPU(PointInfo *pointInfo,
   while(hostConFlag && index < maxIter)
   {
     hostConFlag = 0;
-    
+
     gpuErrchk(cudaMemcpy(devConFlag,hostConFlagPtr,
                          sizeof(unsigned int),cudaMemcpyHostToDevice));
-    
+
     assignPointsLloyd<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,
                                               devCentInfo,
                                               devPointData,
@@ -1089,27 +1363,27 @@ double startLloydOnGPU(PointInfo *pointInfo,
   cudaFree(devNewCentSum);
   cudaFree(devNewCentCount);
   cudaFree(devConFlag);
-  
+
   endTime = omp_get_wtime();
   return endTime - startTime;
 }
 
-PointInfo *storePointInfoOnGPU(PointInfo *pointInfo, 
+PointInfo *storePointInfoOnGPU(PointInfo *pointInfo,
                                const int numPnt)
 {
   PointInfo *devPointInfo = NULL;
   gpuErrchk(cudaMalloc(&devPointInfo, sizeof(PointInfo)*numPnt));
-  gpuErrchk(cudaMemcpy(devPointInfo, pointInfo, 
+  gpuErrchk(cudaMemcpy(devPointInfo, pointInfo,
                          sizeof(PointInfo)*numPnt, cudaMemcpyHostToDevice));
   return devPointInfo;
 }
 
-CentInfo *storeCentInfoOnGPU(CentInfo *centInfo, 
+CentInfo *storeCentInfoOnGPU(CentInfo *centInfo,
                              const int numCent)
 {
   CentInfo *devCentInfo = NULL;
   gpuErrchk(cudaMalloc(&devCentInfo, sizeof(CentInfo) * numCent));
-  gpuErrchk(cudaMemcpy(devCentInfo, centInfo, 
+  gpuErrchk(cudaMemcpy(devCentInfo, centInfo,
                          sizeof(CentInfo)*numCent, cudaMemcpyHostToDevice));
   return devCentInfo;
 }
@@ -1120,7 +1394,7 @@ DTYPE *storeDataOnGPU(DTYPE *data,
 {
   DTYPE *devData = NULL;
   gpuErrchk(cudaMalloc(&devData, sizeof(DTYPE) * numVec * numFeat));
-  gpuErrchk(cudaMemcpy(devData, data, 
+  gpuErrchk(cudaMemcpy(devData, data,
                          sizeof(DTYPE)*numVec*numFeat, cudaMemcpyHostToDevice));
   return devData;
 }
@@ -1140,4 +1414,13 @@ void warmupGPU()
   cudaDeviceSynchronize();
 
   cudaFree(dev_tmp);
+}
+
+void warmupGPU(const int numGPU)
+{
+  for (int i = 0; i < numGPU; i++)
+  {
+    cudaSetDevice(i);
+    cudaDeviceSynchronize();
+  }
 }

@@ -47,6 +47,22 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                         const int numGPU,
                         unsigned int *ranIter);
 
+void calcNewMaxDrift(DTYPE *maxDrifts,
+                DTYPE *newMaxDriftArr,
+                DTYPE **hostMaxDriftArrs,
+                const int numGrp,
+                const int numGPU);
+
+void calcWeightedMeans(CentInfo *newCentInfo,
+                       CentInfo **allCentInfo,
+                       DTYPE *newCentData,
+                       DTYPE *oldCentData,
+                       DTYPE **allCentData,
+                       const int numCent,
+                       const int numGrp,
+                       const int numDim,
+                       const int numGPU);
+
 double startSuperOnGPU(PointInfo *pointInfo,
                         CentInfo *centInfo,
                         DTYPE *pointData,
@@ -67,16 +83,18 @@ double startLloydOnGPU(PointInfo *pointInfo,
                        const int maxIter,
                        unsigned int *ranIter);
 
-DTYPE *storeDataOnGPU(DTYPE *data, 
+DTYPE *storeDataOnGPU(DTYPE *data,
                       const int numVec,
                       const int numFeat);
 
-PointInfo *storePointInfoOnGPU(PointInfo *pointInfo, 
+PointInfo *storePointInfoOnGPU(PointInfo *pointInfo,
                                const int numPnt);
 
-CentInfo *storeCentInfoOnGPU(CentInfo *centInfo, 
+CentInfo *storeCentInfoOnGPU(CentInfo *centInfo,
                              const int numCent);
 
 void warmupGPU();
+
+void warmupGPU(const int numGPU);
 
 #endif

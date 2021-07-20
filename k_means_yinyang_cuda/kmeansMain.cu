@@ -19,7 +19,7 @@ int main(int argc, char *argv[])
   // -m  <number_of_CPU_threads> (Default is 1)
   // -i  <max_iterations_to_run> (Default is 1000)
   // -g  <number_of_GPUs>        (Default is 1)
-  // -wc <write_to_filepath>     (write final clusters to filepath) 
+  // -wc <write_to_filepath>     (write final clusters to filepath)
   // -wa <write_to_filepath>     (write final point assignments to filepath)
   // -wt <write_to_filepath>     (write timing data to filepath)
   // -v                          (run validation tests)
@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
       return 0;
     }
   }
-  
+
   int numPnt;
   int numCent;
   int numGrp = 20;
@@ -95,7 +95,7 @@ int main(int argc, char *argv[])
   char *writeCentPath;
   char *writeAssignPath;
   char *writeTimePath;
-  
+
 
   //Read in parameters from file:
   //dataset filename and cluster instance file
@@ -110,44 +110,44 @@ int main(int argc, char *argv[])
   ImpType impCode = parseImpString(argv[1]);
   if(impCode == INVALIDIMP)
   {
-    printf("Error: Invalid implementation given. Use -h flag for valid implementation types. Exiting...\n"); 
+    printf("Error: Invalid implementation given. Use -h flag for valid implementation types. Exiting...\n");
     return 1;
   }
-  
-  
-  
+
+
+
   char datasetPath[200];
   strcpy(datasetPath, argv[2]);
 
   // get data info
   numPnt = atoi(argv[3]);
   if(numPnt <= 0){
-    printf("Error: Cannot recognize given number of points. Exiting...\n"); 
+    printf("Error: Cannot recognize given number of points. Exiting...\n");
     return 1;
   }
-  
+
   numDim = atoi(argv[4]);
   if(numDim <= 0){
-    printf("Error: Cannot recognize given number of dimensions. Exiting...\n"); 
+    printf("Error: Cannot recognize given number of dimensions. Exiting...\n");
     return 1;
   }
-  
+
   numCent = atoi(argv[5]);
   if(numCent <= 0){
-    printf("Error: Cannot recognize given number of clusters. Exiting...\n"); 
+    printf("Error: Cannot recognize given number of clusters. Exiting...\n");
     return 1;
   }
   if(numGrp > numCent)
   numGrp = numCent;
-  
+
   if(impCode == FULLCPU || impCode == SIMPLECPU || impCode == SUPERCPU || impCode == LLOYDCPU){
     if(numCent < 10)
     numGrp = numCent;
     else
     numGrp = numCent / 10;
   }
-  
-  
+
+
   // get optional arguments
   for(int i = 0; i < argc; i++)
   {
@@ -185,7 +185,7 @@ int main(int argc, char *argv[])
       numGPU = atoi(argv[i+1]);
       if(numGPU <= 0 || numGPU > availGPU)
       {
-        printf("Error: Invalid number of requested GPU's. Exiting...\n"); 
+        printf("Error: Invalid number of requested GPU's. Exiting...\n");
         return 1;
       }
     }
@@ -205,14 +205,14 @@ int main(int argc, char *argv[])
       writeTimePath = argv[i+1];
     }
   }
-  
+
   unsigned int ranIter;
 
 
   //import and create dataset
   PointInfo *pointInfo = (PointInfo *)malloc(sizeof(PointInfo) * numPnt);
   DTYPE *pointData = (DTYPE *)malloc(sizeof(DTYPE) * numPnt * numDim);
-  
+
 
   if(importPoints(datasetPath, pointInfo, pointData, numPnt, numDim))
   {
@@ -243,63 +243,63 @@ int main(int argc, char *argv[])
   {
     case FULLGPU:
       warmupGPU();
-      runtime = 
+      runtime =
         startFullOnGPU(pointInfo, centInfo, pointData, centData,
                        numPnt, numCent, numGrp, numDim, maxIter, &ranIter);
       break;
     case SIMPLEGPU:
-      warmupGPU();
-      runtime = 
+      warmupGPU(numGPU);
+      runtime =
         startSimpleOnGPU(pointInfo, centInfo, pointData, centData,
-                         numPnt, numCent, numGrp, numDim, maxIter, numGPU, 
+                         numPnt, numCent, numGrp, numDim, maxIter, numGPU,
                          &ranIter);
       break;
     case SUPERGPU:
       warmupGPU();
-      runtime = 
+      runtime =
         startSuperOnGPU(pointInfo, centInfo, pointData, centData,
                         numPnt, numCent, numDim, maxIter, &ranIter);
       break;
     case LLOYDGPU:
       warmupGPU();
-      runtime = 
+      runtime =
         startLloydOnGPU(pointInfo, centInfo, pointData, centData,
                         numPnt, numCent, numDim, maxIter, &ranIter);
       break;
     case FULLCPU:
-      runtime = 
-        startFullOnCPU(pointInfo, centInfo, pointData, centData, numPnt, 
+      runtime =
+        startFullOnCPU(pointInfo, centInfo, pointData, centData, numPnt,
                        numCent, numGrp, numDim, numThread, maxIter, &ranIter);
       break;
     case SIMPLECPU:
-      runtime = 
-        startSimpleOnCPU(pointInfo, centInfo, pointData, centData, numPnt, 
+      runtime =
+        startSimpleOnCPU(pointInfo, centInfo, pointData, centData, numPnt,
                          numCent, numGrp, numDim, numThread, maxIter, &ranIter);
       break;
     case SUPERCPU:
-      runtime = 
+      runtime =
         startSuperOnCPU(pointInfo, centInfo, pointData, centData,
                         numPnt, numCent, numDim, numThread, maxIter, &ranIter);
       break;
     case LLOYDCPU:
-      runtime = 
+      runtime =
         startLloydOnCPU(pointInfo, centInfo, pointData, centData,
                         numPnt, numCent, numDim, numThread, maxIter, &ranIter);
       break;
-    default: 
+    default:
       free(pointInfo);
       free(pointData);
       free(centInfo);
       free(centData);
       return unknownImpError;
   }
-  
+
   if(writeCentFlag)
   writeData(centData, numCent, numDim, writeCentPath);
   if(writeAssignFlag)
   writeResults(pointInfo, numPnt, writeAssignPath);
   if(writeTimeFlag)
-  writeTimeData(writeTimePath, &runtime, 1, ranIter, 
+  writeTimeData(writeTimePath, &runtime, 1, ranIter,
                 numPnt, numCent, numGrp, numDim, numThread);
 
   free(pointData);
