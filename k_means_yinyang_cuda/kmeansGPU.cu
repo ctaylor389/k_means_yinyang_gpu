@@ -36,7 +36,6 @@ double startFullOnGPU(PointInfo *pointInfo,
 
   unsigned int *hostConFlagPtr = &hostConFlag;
   int grpLclSize = sizeof(unsigned int)*numGrp*BLOCKSIZE;
-  int oldPosSize = sizeof(DTYPE)*numDim*BLOCKSIZE;
 
   int index = 1;
 
@@ -78,6 +77,9 @@ double startFullOnGPU(PointInfo *pointInfo,
 
   DTYPE *devOldCentSum = NULL;
   cudaMalloc(&devOldCentSum, sizeof(DTYPE) * numCent * numDim);
+
+  DTYPE *devOldCentData = NULL;
+  cudaMalloc(&devOldCentData, sizeof(DTYPE) * numCent * numDim);
 
   unsigned int *devNewCentCount = NULL;
   cudaMalloc(&devNewCentCount, sizeof(unsigned int) * numCent);
@@ -131,11 +133,11 @@ double startFullOnGPU(PointInfo *pointInfo,
                                          devNewCentCount,numPnt,numDim);
 
     // make new centroids
-    calcNewCentroids<<<NBLOCKS, BLOCKSIZE, oldPosSize>>>(devPointInfo,devCentInfo,
-                                                         devCentData,devOldCentSum,
-                                                         devNewCentSum,devMaxDriftArr,
-                                                         devOldCentCount,devNewCentCount,
-                                                         numCent,numDim);
+    calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,devCentInfo,
+                                             devCentData,devOldCentData,
+                                             devOldCentSum,devNewCentSum,
+                                             devMaxDriftArr,devOldCentCount,
+                                             devNewCentCount,numCent,numDim);
 
     assignPointsFull<<<NBLOCKS, BLOCKSIZE, grpLclSize>>>(devPointInfo,devCentInfo,
                                                          devPointData,devPointLwrs,
@@ -155,11 +157,11 @@ double startFullOnGPU(PointInfo *pointInfo,
                                        devNewCentCount,numPnt,numDim);
 
   // make new centroids
-  calcNewCentroids<<<NBLOCKS, BLOCKSIZE, oldPosSize>>>(devPointInfo,devCentInfo,
-                                                       devCentData,devOldCentSum,
-                                                       devNewCentSum,devMaxDriftArr,
-                                                       devOldCentCount,devNewCentCount,
-                                                       numCent,numDim);
+  calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,devCentInfo,
+                                             devCentData,devOldCentData,
+                                             devOldCentSum,devNewCentSum,
+                                             devMaxDriftArr,devOldCentCount,
+                                             devNewCentCount,numCent,numDim);
 
   cudaDeviceSynchronize();
 
@@ -212,7 +214,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
   unsigned int *hostConFlagPtr = &hostConFlag;
   int grpLclSize = sizeof(unsigned int)*numGrp*BLOCKSIZE;
-  int oldPosSize = sizeof(DTYPE)*numDim*BLOCKSIZE;
 
   int index = 1;
 
@@ -254,6 +255,9 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
   DTYPE *devOldCentSum = NULL;
   cudaMalloc(&devOldCentSum, sizeof(DTYPE) * numCent * numDim);
+  
+  DTYPE *devOldCentData = NULL;
+  cudaMalloc(&devOldCentData, sizeof(DTYPE) * numCent * numDim);
 
   unsigned int *devNewCentCount = NULL;
   cudaMalloc(&devNewCentCount, sizeof(unsigned int) * numCent);
@@ -306,11 +310,11 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                          devNewCentCount,numPnt,numDim);
 
     // make new centroids
-    calcNewCentroids<<<NBLOCKS, BLOCKSIZE, oldPosSize>>>(devPointInfo,devCentInfo,
-                                                         devCentData,devOldCentSum,
-                                                         devNewCentSum,devMaxDriftArr,
-                                                         devOldCentCount,devNewCentCount,
-                                                         numCent,numDim);
+    calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,devCentInfo,
+                                             devCentData,devOldCentData,
+                                             devOldCentSum,devNewCentSum,
+                                             devMaxDriftArr,devOldCentCount,
+                                             devNewCentCount,numCent,numDim);
 
     assignPointsSimple<<<NBLOCKS, BLOCKSIZE, grpLclSize>>>(devPointInfo,devCentInfo,
                                                            devPointData,devPointLwrs,
@@ -330,11 +334,11 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                        devNewCentCount,numPnt,numDim);
 
   // make new centroids
-  calcNewCentroids<<<NBLOCKS, BLOCKSIZE, oldPosSize>>>(devPointInfo,devCentInfo,
-                                                       devCentData,devOldCentSum,
-                                                       devNewCentSum,devMaxDriftArr,
-                                                       devOldCentCount,devNewCentCount,
-                                                       numCent,numDim);
+  calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,devCentInfo,
+                                             devCentData,devOldCentData,
+                                             devOldCentSum,devNewCentSum,
+                                             devMaxDriftArr,devOldCentCount,
+                                             devNewCentCount,numCent,numDim);
 
   cudaDeviceSynchronize();
 
@@ -415,7 +419,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   }
 
   int grpLclSize = sizeof(unsigned int)*numGrp*BLOCKSIZE;
-  int oldPosSize = sizeof(DTYPE)*numDim*BLOCKSIZE;
 
   int index = 1;
 
@@ -452,7 +455,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
     gpuErrchk(cudaMalloc(&devPointData[i], sizeof(DTYPE) * numPnts[i] * numDim));
 
-    // possible error here ???
     gpuErrchk(cudaMemcpy(devPointData[i],
                          pointData+((i*numPnt/numGPU) * numDim),
                          sizeof(DTYPE)*numPnts[i]*numDim,
@@ -470,6 +472,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   // store centroids on device
   CentInfo *devCentInfo[numGPU];
   DTYPE *devCentData[numGPU];
+  DTYPE *devOldCentData[numGPU];
 
   #pragma omp parallel for num_threads(numGPU)
   for (int i = 0; i < numGPU; i++)
@@ -478,6 +481,9 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
     // alloc dataset and drift array to GPU
     gpuErrchk(cudaMalloc(&devCentInfo[i], sizeof(CentInfo)*numCent));
+    
+    // alloc the old position data structure
+    gpuErrchk(cudaMalloc(&devOldCentData[i], sizeof(DTYPE) * numDim * numCent));
 
     // copy input data to GPU
     gpuErrchk(cudaMemcpy(devCentInfo[i],
@@ -560,7 +566,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(cudaSetDevice(i));
     clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr[i], numGrp);
-
   }
 
   #pragma omp parallel for num_threads(numGPU)
@@ -582,13 +587,13 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   CentInfo **allCentInfo = (CentInfo **)malloc(sizeof(CentInfo*)*numGPU);
   for (int i = 0; i < numGPU; i++)
   {
-      allCentInfo[i] = (CentInfo *)malloc(sizeof(CentInfo)*numCent);
+    allCentInfo[i] = (CentInfo *)malloc(sizeof(CentInfo)*numCent);
   }
 
   DTYPE **allCentData = (DTYPE **)malloc(sizeof(DTYPE*)*numGPU);
   for (int i = 0; i < numGPU; i++)
   {
-      allCentData[i] = (DTYPE *)malloc(sizeof(DTYPE)*numCent*numDim);
+    allCentData[i] = (DTYPE *)malloc(sizeof(DTYPE)*numCent*numDim);
   }
 
   CentInfo *newCentInfo = (CentInfo *)malloc(sizeof(CentInfo) * numCent);
@@ -608,7 +613,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   hostMaxDriftArrs = (DTYPE **)malloc(sizeof(DTYPE*)*numGPU);
   for (int i = 0; i < numGPU; i++)
   {
-      hostMaxDriftArrs[i] = (DTYPE *)malloc(sizeof(DTYPE)*numGrp);
+    hostMaxDriftArrs[i] = (DTYPE *)malloc(sizeof(DTYPE)*numGrp);
   }
 
   DTYPE *newMaxDriftArr;
@@ -627,7 +632,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
     for (int i = 0; i < numCent; i++)
     {
-        newCentInfo[i].count = 0;
+      newCentInfo[i].count = 0;
     }
 
     #pragma omp parallel for num_threads(numGPU)
@@ -672,15 +677,11 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (int i = 0; i < numGPU; i++)
     {
       gpuErrchk(cudaSetDevice(i));
-      calcNewCentroids<<<NBLOCKS,BLOCKSIZE,oldPosSize>>>(devPointInfo[i],
-                                                         devCentInfo[i],
-                                                         devCentData[i],
-                                                         devOldCentSum[i],
-                                                         devNewCentSum[i],
-                                                         devMaxDriftArr[i],
-                                                         devOldCentCount[i],
-                                                         devNewCentCount[i],
-                                                         numCent,numDim);
+      calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo[i],devCentInfo[i],
+                                             devCentData[i],devOldCentData[i],
+                                             devOldCentSum[i],devNewCentSum[i],
+                                             devMaxDriftArr[i],devOldCentCount[i],
+                                             devNewCentCount[i],numCent,numDim);
 
     }
 
@@ -819,15 +820,11 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (int i = 0; i < numGPU; i++)
   {
     gpuErrchk(cudaSetDevice(i));
-    calcNewCentroids<<<NBLOCKS,BLOCKSIZE,oldPosSize>>>(devPointInfo[i],
-                                                       devCentInfo[i],
-                                                       devCentData[i],
-                                                       devOldCentSum[i],
-                                                       devNewCentSum[i],
-                                                       devMaxDriftArr[i],
-                                                       devOldCentCount[i],
-                                                       devNewCentCount[i],
-                                                       numCent,numDim);
+    calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo[i],devCentInfo[i],
+                                             devCentData[i],devOldCentData[i],
+                                             devOldCentSum[i],devNewCentSum[i],
+                                             devMaxDriftArr[i],devOldCentCount[i],
+                                             devNewCentCount[i],numCent,numDim);
   }
 
   if (numGPU > 1)
@@ -1042,7 +1039,6 @@ double startSuperOnGPU(PointInfo *pointInfo,
   unsigned int hostConFlag = 1;
 
   unsigned int *hostConFlagPtr = &hostConFlag;
-  int oldPosSize = sizeof(DTYPE)*numDim*BLOCKSIZE;
 
   int index = 1;
 
@@ -1087,6 +1083,9 @@ double startSuperOnGPU(PointInfo *pointInfo,
 
   DTYPE *devOldCentSum = NULL;
   cudaMalloc(&devOldCentSum, sizeof(DTYPE) * numCent * numDim);
+  
+  DTYPE *devOldCentData = NULL;
+  cudaMalloc(&devOldCentData, sizeof(DTYPE) * numCent * numDim);
 
   unsigned int *devNewCentCount = NULL;
   cudaMalloc(&devNewCentCount, sizeof(unsigned int) * numCent);
@@ -1140,11 +1139,11 @@ double startSuperOnGPU(PointInfo *pointInfo,
                                          devNewCentCount,numPnt,numDim);
 
     // make new centroids
-    calcNewCentroids<<<NBLOCKS, BLOCKSIZE, oldPosSize>>>(devPointInfo,devCentInfo,
-                                                         devCentData,devOldCentSum,
-                                                         devNewCentSum,devMaxDrift,
-                                                         devOldCentCount,devNewCentCount,
-                                                         numCent,numDim);
+    calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,devCentInfo,
+                                             devCentData,devOldCentData,
+                                             devOldCentSum,devNewCentSum,
+                                             devMaxDrift,devOldCentCount,
+                                             devNewCentCount,numCent,numDim);
 
     assignPointsSuper<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,devCentInfo,
                                               devPointData,devPointLwrs,
@@ -1164,11 +1163,11 @@ double startSuperOnGPU(PointInfo *pointInfo,
                                        devNewCentCount,numPnt,numDim);
 
   // make new centroids
-  calcNewCentroids<<<NBLOCKS, BLOCKSIZE, oldPosSize>>>(devPointInfo,devCentInfo,
-                                                       devCentData,devOldCentSum,
-                                                       devNewCentSum,devMaxDrift,
-                                                       devOldCentCount,devNewCentCount,
-                                                       numCent,numDim);
+  calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,devCentInfo,
+                                             devCentData,devOldCentData,
+                                             devOldCentSum,devNewCentSum,
+                                             devMaxDrift,devOldCentCount,
+                                             devNewCentCount,numCent,numDim);
 
   cudaDeviceSynchronize();
 

@@ -537,6 +537,7 @@ __global__ void calcCentData(PointInfo *pointInfo,
 __global__ void calcNewCentroids(PointInfo *pointInfo,
                                CentInfo *centInfo,
                                DTYPE *centData,
+                               DTYPE *oldCentData,
                                DTYPE *oldSums,
                                DTYPE *newSums,
                                DTYPE *maxDriftArr,
@@ -549,21 +550,18 @@ __global__ void calcNewCentroids(PointInfo *pointInfo,
 
   if(tid >= numCent)
   return;
-  unsigned int btid = threadIdx.x;
 
   DTYPE oldFeature, oldSumFeat, newSumFeat, compDrift;
 
   unsigned int dimIndex;
   //vector oldVec;
 
-  extern __shared__ DTYPE oldCentPos[];
-
   // create the new centroid vector
   for(dimIndex = 0; dimIndex < numDim; dimIndex++)
   {
     if(newCounts[tid] > 0)
     {
-      oldCentPos[(btid * numDim) + dimIndex] = centData[(tid * numDim) + dimIndex];
+      oldCentData[(tid * numDim) + dimIndex] = centData[(tid * numDim) + dimIndex];
 
       oldFeature = centData[(tid * numDim) + dimIndex];
       oldSumFeat = oldSums[(tid * numDim) + dimIndex];
@@ -575,7 +573,7 @@ __global__ void calcNewCentroids(PointInfo *pointInfo,
     else
     {
       // no change to centroid
-      oldCentPos[(btid * numDim) + dimIndex] = centData[(tid * numDim) + dimIndex];
+      oldCentData[(tid * numDim) + dimIndex] = centData[(tid * numDim) + dimIndex];
     }
     newSums[(tid * numDim) + dimIndex] = 0.0;
     oldSums[(tid * numDim) + dimIndex] = 0.0;
@@ -583,7 +581,7 @@ __global__ void calcNewCentroids(PointInfo *pointInfo,
 
 
   // calculate the centroid's drift
-  compDrift = calcDis(&oldCentPos[btid * numDim],
+  compDrift = calcDis(&oldCentData[tid * numDim],
                       &centData[tid * numDim],
                       numDim);
 

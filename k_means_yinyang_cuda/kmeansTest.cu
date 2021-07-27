@@ -10,9 +10,9 @@ int runValidationTests(ImpType impCode)
   
   TestError testResult;
   
-  printf("Testing with data at iono\n");
-  testResult = testImpWithKeyImp(LLOYDGPU, impCode, 1864620, 200, 20, 
-                                 2, 500, 16, 1, 0.0001, "/home/ctaylor/yinyangKmeans/data/synthetic/iono_20min_2Mpts_2D.txt");
+  printf("Testing with data at \n");
+  testResult = testImpWithKeyImp(LLOYDGPU, impCode, 1000000, 200, 20, 
+                                 32, 500, 16, 1, 0.0001, "/home/ctaylor/data/synthetic/dataset_fixed_len_pts_expo_NDIM_32_pts_1000000.txt");
   printErrorMessage(testResult);
   
   if(testResult != testSuccess)
