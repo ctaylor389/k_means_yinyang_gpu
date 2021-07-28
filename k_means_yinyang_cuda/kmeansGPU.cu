@@ -609,19 +609,12 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
   DTYPE *oldCentData = (DTYPE *)malloc(sizeof(DTYPE) * numCent * numDim);
 
-  DTYPE **hostMaxDriftArrs;
-  hostMaxDriftArrs = (DTYPE **)malloc(sizeof(DTYPE*)*numGPU);
-  for (int i = 0; i < numGPU; i++)
-  {
-    hostMaxDriftArrs[i] = (DTYPE *)malloc(sizeof(DTYPE)*numGrp);
-  }
-
   DTYPE *newMaxDriftArr;
   newMaxDriftArr=(DTYPE *)malloc(sizeof(DTYPE)*numGrp);
-
-  DTYPE *maxDrifts;
-  maxDrifts=(DTYPE *)malloc(sizeof(DTYPE)*numGPU);
-
+  for (int i = 0; i < numGrp; i++)
+  {
+    newMaxDriftArr[i] = 0.0;
+  }
 
   unsigned int doesNotConverge = 1;
 
@@ -687,6 +680,11 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
     if (numGPU > 1)
     {
+      for (int i = 0; i < numGrp; i++)
+      {
+        newMaxDriftArr[i] = 0.0;
+      }
+
       #pragma omp parallel for num_threads(numGPU)
       for (int i = 0; i < numGPU; i++)
       {
@@ -706,7 +704,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
       }
 
       calcWeightedMeans(newCentInfo, allCentInfo, newCentData, oldCentData,
-        allCentData, numCent, numGrp, numDim, numGPU);
+        allCentData, newMaxDriftArr, numCent, numGrp, numDim, numGPU);
 
       #pragma omp parallel for num_threads(numGPU)
       for (int i = 0; i < numGPU; i++)
@@ -729,18 +727,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                       newCentData, sizeof(DTYPE)*numCent*numDim,
                                   cudaMemcpyHostToDevice));
       }
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (int i = 0; i < numGPU; i++)
-      {
-          gpuErrchk(cudaSetDevice(i));
-          gpuErrchk(cudaMemcpy(hostMaxDriftArrs[i],
-                      devMaxDriftArr[i], numGrp*sizeof(DTYPE),
-                                  cudaMemcpyDeviceToHost));
-      }
-
-      calcNewMaxDrift(maxDrifts, newMaxDriftArr, hostMaxDriftArrs, numGrp,
-        numGPU);
 
       #pragma omp parallel for num_threads(numGPU)
       for (int i = 0; i < numGPU; i++)
@@ -848,7 +834,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     }
 
     calcWeightedMeans(newCentInfo, allCentInfo, newCentData, oldCentData,
-      allCentData, numCent, numGrp, numDim, numGPU);
+      allCentData, newMaxDriftArr, numCent, numGrp, numDim, numGPU);
 
     #pragma omp parallel for num_threads(numGPU)
     for (int i = 0; i < numGPU; i++)
@@ -918,39 +904,12 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   return endTime - startTime;
 }
 
-void calcNewMaxDrift(DTYPE *maxDrifts,
-                DTYPE *newMaxDriftArr,
-                DTYPE **hostMaxDriftArrs,
-                const int numGrp,
-                const int numGPU)
-{
-    DTYPE max;
-    for (int i = 0; i < numGrp; i++)
-    {
-        for (int j = 0; j < numGPU; j++)
-        {
-            maxDrifts[j] = hostMaxDriftArrs[j][i];
-        }
-
-        max = maxDrifts[0];
-
-        for (int k = 1; k < numGPU; k++)
-        {
-            if (maxDrifts[k] > max)
-            {
-                max = maxDrifts[k];
-            }
-        }
-
-        newMaxDriftArr[i] = max;
-    }
-}
-
 void calcWeightedMeans(CentInfo *newCentInfo,
                        CentInfo **allCentInfo,
                        DTYPE *newCentData,
                        DTYPE *oldCentData,
                        DTYPE **allCentData,
+                       DTYPE *newMaxDriftArr,
                        const int numCent,
                        const int numGrp,
                        const int numDim,
@@ -958,8 +917,8 @@ void calcWeightedMeans(CentInfo *newCentInfo,
 {
   DTYPE numerator = 0;
   DTYPE denominator = 0;
+  DTYPE zeroNumerator = 0;
   int zeroCount = 0;
-  int zeroNumerator = 0;
 
   for (int i = 0; i < numCent; i++)
   {
@@ -1016,6 +975,11 @@ void calcWeightedMeans(CentInfo *newCentInfo,
       newCentInfo[j].drift = calcDisCPU(&newCentData[j*numDim],
                                            &oldCentData[j*numDim],
                                            numDim);
+
+      if (newCentInfo[j].drift > newMaxDriftArr[newCentInfo[j].groupNum])
+        {
+          newMaxDriftArr[newCentInfo[j].groupNum] = newCentInfo[j].drift;
+        }
   }
 }
 

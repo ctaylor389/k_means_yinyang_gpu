@@ -47,17 +47,12 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                         const int numGPU,
                         unsigned int *ranIter);
 
-void calcNewMaxDrift(DTYPE *maxDrifts,
-                DTYPE *newMaxDriftArr,
-                DTYPE **hostMaxDriftArrs,
-                const int numGrp,
-                const int numGPU);
-
 void calcWeightedMeans(CentInfo *newCentInfo,
                        CentInfo **allCentInfo,
                        DTYPE *newCentData,
                        DTYPE *oldCentData,
                        DTYPE **allCentData,
+                       DTYPE *newMaxDriftArr,
                        const int numCent,
                        const int numGrp,
                        const int numDim,
