@@ -395,7 +395,7 @@ int compareData(DTYPE *data1,
       maxDiff = diff;
     }
   }
-  printf("    *Max difference between data is %.15f\n", maxDiff);
+  printf("  Max difference between data is %.15f\n", maxDiff);
   
   // datasets are equal within tolerance
   return returnFlag;

@@ -63,7 +63,7 @@ TestError testImpWithKeyFile(ImpType testImp,
 
 
 
-void printErrorMessage(TestError errCode);
+void printErrorMessage(TestError errCode, int testNum);
 
 void printTestParameters(ImpType keyImp,
                          ImpType testImp,

@@ -3,7 +3,7 @@
 
 // precision of floating point data type
 // double or float
-#define DTYPE double
+#define DTYPE float
 
 //Kernel block size
 #define BLOCKSIZE 256

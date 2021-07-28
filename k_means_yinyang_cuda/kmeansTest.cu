@@ -7,13 +7,18 @@
 int runValidationTests(ImpType impCode)
 {
   int failFlag = 0;
+  int testCounter = 0;
   
   TestError testResult;
   
-  printf("Testing with data at \n");
+  printf("\n");
+  
+  printf("Starting Test %d with data at ", testCounter);
   testResult = testImpWithKeyImp(LLOYDGPU, impCode, 1000000, 200, 20, 
                                  32, 500, 16, 1, 0.0001, "/home/ctaylor/data/synthetic/dataset_fixed_len_pts_expo_NDIM_32_pts_1000000.txt");
-  printErrorMessage(testResult);
+  printErrorMessage(testResult, testCounter);
+  testCounter++;
+  printf("\n");
   
   if(testResult != testSuccess)
   failFlag = 1;
@@ -120,7 +125,7 @@ TestError testImpWithKeyImp(ImpType keyImp,
                             DTYPE tolerance,
                             const char *filepath)
 {
-  printf("%s\n", filepath);
+  printf("%s", filepath);
   double keyRuntime;
   double testRuntime;
   unsigned int keyRanIter;
@@ -149,55 +154,55 @@ TestError testImpWithKeyImp(ImpType keyImp,
   {
     case FULLGPU:
       warmupGPU();
-      printf("    *Starting Full GPU\n");
+      printf("  Starting Full GPU\n");
       keyRuntime = startFullOnGPU(keyPointInfo, keyCentInfo, pointData, keyCentData,
                                   numPnt, numCent, numGrp, numDim, maxIter, &keyRanIter);
-      printf("    *Full GPU complete.\n");
+      printf("  Full GPU complete\n");
       break;
     case SIMPLEGPU:
       warmupGPU();
-      printf("    *Starting Simplified GPU\n");
+      printf("  Starting Simplified GPU\n");
       keyRuntime = startSimpleOnGPU(keyPointInfo, keyCentInfo, pointData, keyCentData,
                                     numPnt, numCent, numGrp, numDim, maxIter, numGPU, &keyRanIter);
-      printf("    *Simplified GPU complete.\n");
+      printf("  Simplified GPU complete\n");
       break;
     case SUPERGPU:
       warmupGPU();
-      printf("    *Starting Super Simplified GPU\n");
+      printf("  Starting Super Simplified GPU\n");
       keyRuntime = startSuperOnGPU(keyPointInfo, keyCentInfo, pointData, keyCentData,
                                    numPnt, numCent, numDim, maxIter, &keyRanIter);
-      printf("    *Super Simplified GPU complete.\n");
+      printf("  Super Simplified GPU complete\n");
       break;
     case LLOYDGPU:
       warmupGPU();
-      printf("    *Starting Lloyd GPU\n");
+      printf("  Starting Lloyd GPU\n");
       keyRuntime = startLloydOnGPU(keyPointInfo, keyCentInfo, pointData, keyCentData,
                                    numPnt, numCent, numDim, maxIter, &keyRanIter);
-      printf("    *Lloyd GPU complete.\n");
+      printf("  Lloyd GPU complete\n");
       break;
     case FULLCPU:
-      printf("    *Starting Full CPU\n");
+      printf("  Starting Full CPU\n");
       keyRuntime = startFullOnCPU(keyPointInfo, keyCentInfo, pointData, keyCentData,
                               numPnt, numCent, numGrp, numDim, numThread, maxIter, &keyRanIter);
-      printf("    *Full CPU complete.\n");
+      printf("  Full CPU complete\n");
       break;
     case SIMPLECPU:
-      printf("    *Starting Simplified CPU\n");
+      printf("  Starting Simplified CPU\n");
       keyRuntime = startSimpleOnCPU(keyPointInfo, keyCentInfo, pointData, keyCentData,
                               numPnt, numCent, numGrp, numDim, numThread, maxIter, &keyRanIter);
-      printf("    *Simplified CPU complete.\n");
+      printf("  Simplified CPU complete\n");
       break;
     case SUPERCPU:
-      printf("    *Starting Super Simplified CPU\n");
+      printf("  Starting Super Simplified CPU\n");
       keyRuntime = startSuperOnCPU(keyPointInfo, keyCentInfo, pointData, keyCentData,
                               numPnt, numCent, numDim, numThread, maxIter, &keyRanIter);
-      printf("    *Super Simplified CPU complete.\n");
+      printf("  Super Simplified CPU complete\n");
       break;
     case LLOYDCPU:
-      printf("    *Starting Lloyd CPU\n");
+      printf("  Starting Lloyd CPU\n");
       keyRuntime = startLloydOnCPU(keyPointInfo, keyCentInfo, pointData, keyCentData,
                               numPnt, numCent, numDim, numThread, maxIter, &keyRanIter);
-      printf("    *Lloyd CPU complete.\n");
+      printf("  Lloyd CPU complete\n");
       break;
     default: 
       free(keyPointInfo);
@@ -207,7 +212,7 @@ TestError testImpWithKeyImp(ImpType keyImp,
       return unknownImpError;
   }
   
-  printf("    *Key Implementation runtime: %f\n", keyRuntime);
+  printf("  Key Implementation runtime: %f\n", keyRuntime);
 
   // create necessary data structures
   PointInfo *testPointInfo = (PointInfo *)malloc(sizeof(PointInfo) * numPnt);
@@ -226,55 +231,55 @@ TestError testImpWithKeyImp(ImpType keyImp,
   {
     case FULLGPU:
       warmupGPU();
-      printf("    *Starting Full GPU\n");
+      printf("  Starting Full GPU\n");
       testRuntime = startFullOnGPU(testPointInfo, testCentInfo, pointData, testCentData,
                                   numPnt, numCent, numGrp, numDim, maxIter, &testRanIter);
-      printf("    *Full GPU complete.\n");
+      printf("  Full GPU complete\n");
       break;
     case SIMPLEGPU:
       warmupGPU();
-      printf("    *Starting Simplified GPU\n");
+      printf("  Starting Simplified GPU\n");
       testRuntime = startSimpleOnGPU(testPointInfo, testCentInfo, pointData, testCentData,
                                     numPnt, numCent, numGrp, numDim, maxIter, numGPU, &testRanIter);
-      printf("    *Simplified GPU complete.\n");
+      printf("  Simplified GPU complete\n");
       break;
     case SUPERGPU:
       warmupGPU();
-      printf("    *Starting Super Simplified GPU\n");
+      printf("  Starting Super Simplified GPU\n");
       testRuntime = startSuperOnGPU(testPointInfo, testCentInfo, pointData, testCentData,
                                    numPnt, numCent, numDim, maxIter, &testRanIter);
-      printf("    *Super Simplified GPU complete.\n");
+      printf("  Super Simplified GPU complete\n");
       break;
     case LLOYDGPU:
       warmupGPU();
-      printf("    *Starting Lloyd GPU\n");
+      printf("  Starting Lloyd GPU\n");
       testRuntime = startLloydOnGPU(testPointInfo, testCentInfo, pointData, testCentData,
                                    numPnt, numCent, numDim, maxIter, &testRanIter);
-      printf("    *Lloyd GPU complete.\n");
+      printf("  Lloyd GPU complete\n");
       break;
     case FULLCPU:
-      printf("    *Starting Full CPU\n");
+      printf("  Starting Full CPU\n");
       testRuntime = startFullOnCPU(testPointInfo, testCentInfo, pointData, testCentData,
                               numPnt, numCent, numGrp, numDim, numThread, maxIter, &testRanIter);
-      printf("    *Full CPU complete.\n");
+      printf("  Full CPU complete\n");
       break;
     case SIMPLECPU:
-      printf("    *Starting Simplified CPU\n");
+      printf("  Starting Simplified CPU\n");
       testRuntime = startSimpleOnCPU(testPointInfo, testCentInfo, pointData, testCentData,
                               numPnt, numCent, numGrp, numDim, numThread, maxIter, &testRanIter);
-      printf("    *Simplified CPU complete.\n");
+      printf("  Simplified CPU complete\n");
       break;
     case SUPERCPU:
-      printf("    *Starting Super Simplified CPU\n");
+      printf("  Starting Super Simplified CPU\n");
       testRuntime = startSuperOnCPU(testPointInfo, testCentInfo, pointData, testCentData,
                               numPnt, numCent, numDim, numThread, maxIter, &testRanIter);
-      printf("    *Super Simplified CPU complete.\n");
+      printf("  Super Simplified CPU complete\n");
       break;
     case LLOYDCPU:
-      printf("    *Starting Lloyd CPU\n");
+      printf("  Starting Lloyd CPU\n");
       testRuntime = startLloydOnCPU(testPointInfo, testCentInfo, pointData, testCentData,
                               numPnt, numCent, numDim, numThread, maxIter, &testRanIter);
-      printf("    *Lloyd CPU complete.\n");
+      printf("  Lloyd CPU complete\n");
       break;
     default: 
         free(keyPointInfo);
@@ -287,7 +292,7 @@ TestError testImpWithKeyImp(ImpType keyImp,
         return unknownImpError;
   }
 
-  printf("    *Test Implementation runtime: %f\n\n", testRuntime);
+  printf("  Test Implementation runtime: %f\n", testRuntime);
 
   int centResult = compareData(keyCentData, testCentData, tolerance, numCent, numDim);
   
@@ -301,7 +306,7 @@ TestError testImpWithKeyImp(ImpType keyImp,
   free(testCentInfo);
   free(testCentData);
  
-  printf("    *Found %d mismatching point assignments\n", assignResult);
+  printf("  Found %d mismatching point assignments\n", assignResult);
  
   if(assignResult)
   return testFailedAssign;
@@ -408,37 +413,37 @@ TestError testImpWithKeyFile(ImpType testImp,
 
 
 
-void printErrorMessage(TestError errCode)
+void printErrorMessage(TestError errCode, int testNum)
 {
   switch(errCode)
   {
     case testSuccess:
-      printf("\nTest Successful!");
+      printf("Test %d successful!", testNum);
       printf("\n");
       break;
     case testFailedCent:
-      printf("\nTest Failed: ") ;
-      printf("Final centroids did not match within the given tolerance.");
+      printf("FAILED: Test %d failed\n", testNum);
+      printf("  Final centroids did not match within the given tolerance.");
       printf("\n");
       break;
     case testFailedAssign:
-      printf("\nTest Failed: ") ;
-      printf("Final Point Cluster Assignments did not match.");
+      printf("FAILED: Test %d failed\n", testNum);
+      printf("  Final Point Cluster Assignments did not match.");
       printf("\n");
       break;
     case importError:
-      printf("\nError occurred! ");
-      printf("Dataset could not be imported properly.");
+      printf("Error occurred! ");
+      printf("  Dataset could not be imported properly.");
       printf("\n");
       break;
     case centGenError:
-      printf("\nError occurred! ");
-      printf("Centroids failed to generate from given dataset.");
+      printf("Error occurred! ");
+      printf("  Centroids failed to generate from given dataset.");
       printf("\n");
       break;
     case unknownImpError:
-      printf("\nError occurred! ");
-      printf("An unknown implementation was passed to the test function.");
+      printf("Error occurred! ");
+      printf("  An unknown implementation was passed to the test function.");
       printf("\n");
       break;
   }
@@ -455,7 +460,7 @@ void printTestParameters(ImpType keyImp,
                          const int numGPU,
                          DTYPE tolerance)
 {
-  printf("\n\nTest Implementation: ");
+  printf("\n  Test Implementation: ");
   switch(testImp)
   {
     case FULLGPU:
@@ -483,7 +488,7 @@ void printTestParameters(ImpType keyImp,
       printf("Lloyd's CPU with %d threads", numThread);
       break;
   }
-  printf("\nKey Implementation: ");
+  printf("\n  Key Implementation: ");
   switch(keyImp)
   {
     case FULLGPU:
@@ -511,13 +516,13 @@ void printTestParameters(ImpType keyImp,
       printf("Lloyd's CPU with %d threads", numThread);
       break;
   }
-  printf("\nParameters:\n");
-  printf("  Number of data points: %d\n", numPnt);
-  printf("  Number of clusters: %d\n", numCent);
-  printf("  Number of groups: %d\n", numGrp);
-  printf("  Number of dimensions: %d\n", numDim);
-  printf("  Maximum iterations: %d\n", maxIter);
-  printf("  Tolerance: %f\n", tolerance);
+  printf("\n  Parameters:\n");
+  printf("    Number of data points: %d\n", numPnt);
+  printf("    Number of clusters: %d\n", numCent);
+  printf("    Number of groups: %d\n", numGrp);
+  printf("    Number of dimensions: %d\n", numDim);
+  printf("    Maximum iterations: %d\n", maxIter);
+  printf("    Tolerance: %f\n", tolerance);
 }
 
 
