@@ -11,17 +11,20 @@ int runValidationTests(ImpType impCode)
   
   TestError testResult;
   
-  printf("\n");
-  
-  printf("Starting Test %d with data at ", testCounter);
-  testResult = testImpWithKeyImp(LLOYDGPU, impCode, 1000000, 200, 20, 
-                                 32, 500, 16, 1, 0.0001, "/home/ctaylor/data/synthetic/dataset_fixed_len_pts_expo_NDIM_32_pts_1000000.txt");
-  printErrorMessage(testResult, testCounter);
-  testCounter++;
-  printf("\n");
-  
-  if(testResult != testSuccess)
-  failFlag = 1;
+  for(int i = 0; i < 2; i++)
+  {
+    printf("\n");
+    
+    printf("Starting Test %d with data at ", testCounter);
+    testResult = testImpWithKeyImp(LLOYDGPU, impCode, 1000000, 200, 20, 
+                                   32, 500, 16, 1, 0.0001, "/home/ctaylor/data/synthetic/dataset_fixed_len_pts_expo_NDIM_32_pts_1000000.txt");
+    printErrorMessage(testResult, testCounter);
+    testCounter++;
+    printf("\n");
+    
+    if(testResult != testSuccess)
+    failFlag = 1;
+  }
   
   return failFlag;
   
