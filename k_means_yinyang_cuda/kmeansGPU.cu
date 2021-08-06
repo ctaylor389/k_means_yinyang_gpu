@@ -1568,6 +1568,11 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(cudaSetDevice(i));
     gpuErrchk(cudaMalloc(&devDistCalcCountArr[i], sizeof(unsigned long long int)));
+    hostDistCalcCountArr[i] = 0;
+    gpuErrchk(cudaMemcpy(devDistCalcCountArr[i],
+                         &hostDistCalcCountArr[i],
+                         sizeof(unsigned long long int),
+                         cudaMemcpyHostToDevice));
   }
 
   // variable initialization
