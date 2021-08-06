@@ -17,7 +17,7 @@ int runValidationTests(ImpType impCode)
     
     printf("Starting Test %d with data at ", testCounter);
     testResult = testImpWithKeyImp(LLOYDGPU, impCode, 1000000, 200, 20, 
-                                   32, 500, 16, 1, 0.0001, THIRTY_TWO_PATH, 1);
+                                   32, 500, 16, 1, 2, 0.0001, THIRTY_TWO_PATH, 1);
     printErrorMessage(testResult, testCounter);
     testCounter++;
     printf("\n");
@@ -262,7 +262,8 @@ TestError testImpWithKeyImp(ImpType keyImp,
                             const int numDim,
                             const int maxIter, 
                             const int numThread,
-                            const int numGPU,
+                            const int keyNumGPU,
+                            const int testNumGPU,
                             DTYPE tolerance,
                             const char *filepath,
                             const int countFlag)
