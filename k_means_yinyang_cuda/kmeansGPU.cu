@@ -649,7 +649,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     {
       gpuErrchk(cudaSetDevice(i));
       clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr[i], numGrp);
-
     }
 
 
@@ -757,7 +756,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                                            devMaxDriftArr[i],
                                                            numPnts[i],numCent,
                                                            numGrp,numDim);
-
     }
 
     #pragma omp parallel for num_threads(numGPU)
@@ -1750,7 +1748,8 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                          numPnts[i],
                                          numCent,
                                          numGrp,
-                                         numDim);
+                                         numDim,
+                                         devDistCalcCountArr[i]);
   }
 
   CentInfo **allCentInfo = (CentInfo **)malloc(sizeof(CentInfo*)*numGPU);
@@ -1925,7 +1924,8 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                                                            devCentData[i],
                                                            devMaxDriftArr[i],
                                                            numPnts[i],numCent,
-                                                           numGrp,numDim);
+                                                           numGrp,numDim,
+                                                           devDistCalcCountArr[i]);
 
     }
 
@@ -1971,11 +1971,13 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
   for (int i = 0; i < numGPU; i++)
   {
-    printf("hostDistCalcCountArr[%d]: %llu\n", i, hostDistCalcCountArr[i]);
+    //printf("hostDistCalcCountArr[%d]: %llu\n", i, hostDistCalcCountArr[i]);
     *hostDistCalcCount += hostDistCalcCountArr[i];
   }
 
-  printf("hostDistCalcCount: %llu\n", *hostDistCalcCount);
+  //printf("hostDistCalcCount: %llu\n", *hostDistCalcCount);
+  
+  *countPtr = *hostDistCalcCount;
 
   // calculate data necessary to make new centroids
   #pragma omp parallel for num_threads(numGPU)

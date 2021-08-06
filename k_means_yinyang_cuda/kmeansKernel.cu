@@ -818,6 +818,11 @@ __device__ DTYPE calcDis(DTYPE *vec1, DTYPE *vec2, const int numDim)
 // Overloaded kernels and functions for counting distance calculations //
 /////////////////////////////////////////////////////////////////////////
 
+/*
+Global kernel that assigns one thread to one point
+Given points are each assigned a centroid and upper
+and lower bounds
+*/
 __global__ void initRunKernel(PointInfo *pointInfo,
                             CentInfo *centInfo,
                             DTYPE *pointData,
@@ -850,17 +855,14 @@ __global__ void initRunKernel(PointInfo *pointInfo,
       // make the former current min the new
       // lower bound for it's group
       if(pointInfo[tid].uprBound != INFINITY)
-      {
-        pointLwrs[(tid * numDim) +
-          centInfo[pointInfo[tid].centroidIndex].groupNum] =
-          pointInfo[tid].uprBound;
-      }
+      pointLwrs[(tid * numGrp) + centInfo[pointInfo[tid].centroidIndex].groupNum] =
+                                                                  pointInfo[tid].uprBound;
+
       // update assignment and upper bound
       pointInfo[tid].centroidIndex = centIndex;
       pointInfo[tid].uprBound = currDistance;
     }
-    else if(currDistance < pointLwrs[(tid * numGrp) +
-      centInfo[centIndex].groupNum])
+    else if(currDistance < pointLwrs[(tid * numGrp) + centInfo[centIndex].groupNum])
     {
       pointLwrs[(tid * numGrp) + centInfo[centIndex].groupNum] = currDistance;
     }
@@ -873,16 +875,16 @@ Full Yinyang algorithm point assignment step
 Includes global, group, and local filters
 */
 __global__ void assignPointsFull(PointInfo *pointInfo,
-                                 CentInfo *centInfo,
-                                 DTYPE *pointData,
-                                 DTYPE *pointLwrs,
-                                 DTYPE *centData,
-                                 DTYPE *maxDriftArr,
-                                 const int numPnt,
-                                 const int numCent,
-                                 const int numGrp,
-                                 const int numDim,
-                                 unsigned long long int *calcCount)
+                               CentInfo *centInfo,
+                               DTYPE *pointData,
+                               DTYPE *pointLwrs,
+                               DTYPE *centData,
+                               DTYPE *maxDriftArr,
+                               const int numPnt,
+                               const int numCent,
+                               const int numGrp,
+                               const int numDim,
+                               unsigned long long int *calcCount)
 {
   unsigned int tid=threadIdx.x+(blockIdx.x*BLOCKSIZE);
   if(tid >= numPnt)
@@ -924,7 +926,6 @@ __global__ void assignPointsFull(PointInfo *pointInfo,
       calcDis(&pointData[tid * numDim],
               &centData[pointInfo[tid].centroidIndex * numDim], numDim);
     atomicAdd(calcCount, 1);
-
     // if the lower bound is less than the upper bound
     if(tmpGlobLwr < pointInfo[tid].uprBound)
     {
@@ -942,8 +943,7 @@ __global__ void assignPointsFull(PointInfo *pointInfo,
       // execute point calcs given the groups
       pointCalcsFull(&pointInfo[tid], centInfo, &pointData[tid * numDim],
                      &pointLwrs[tid * numGrp], centData, maxDriftArr,
-                     &groupLclArr[btid * numGrp], numPnt,
-                     numCent, numGrp, numDim, calcCount);
+                     &groupLclArr[btid * numGrp], numPnt, numCent, numGrp, numDim);
     }
   }
 }
@@ -1000,9 +1000,9 @@ __global__ void assignPointsSimple(PointInfo *pointInfo,
   {
     // tighten upper bound ub = d(x, b(x))
     pointInfo[tid].uprBound =
-      calcDis(&pointData[tid * numDim],
-              &centData[pointInfo[tid].centroidIndex * numDim],
-              numDim);
+        calcDis(&pointData[tid * numDim],
+                &centData[pointInfo[tid].centroidIndex * numDim],
+                numDim);
     atomicAdd(calcCount, 1);
 
     // if the lower bound is less than the upper bound
@@ -1018,12 +1018,13 @@ __global__ void assignPointsSimple(PointInfo *pointInfo,
         else
         groupLclArr[index + (btid * numGrp)] = 0;
       }
-        // execute point calcs given the groups
-      pointCalcsSimple(&pointInfo[tid],centInfo, &pointData[tid * numDim],
-                       &pointLwrs[tid * numGrp], centData,
-                       maxDriftArr, &groupLclArr[btid * numGrp],
-                       numPnt, numCent, numGrp, numDim, calcCount);
+
+      // execute point calcs given the groups
+      pointCalcsSimple(&pointInfo[tid],centInfo,&pointData[tid * numDim],
+                       &pointLwrs[tid * numGrp], centData, maxDriftArr,
+                       &groupLclArr[btid * numGrp], numPnt, numCent, numGrp, numDim);
     }
+
   }
 }
 
@@ -1032,16 +1033,16 @@ Super Simplified Yinyang algorithm point assignment step
 Includes only the global filter
 */
 __global__ void assignPointsSuper(PointInfo *pointInfo,
-                                  CentInfo *centInfo,
-                                  DTYPE *pointData,
-                                  DTYPE *pointLwrs,
-                                  DTYPE *centData,
-                                  DTYPE *maxDrift,
-                                  const int numPnt,
-                                  const int numCent,
-                                  const int numGrp,
-                                  const int numDim,
-                                  unsigned long long int *calcCount)
+                                CentInfo *centInfo,
+                                DTYPE *pointData,
+                                DTYPE *pointLwrs,
+                                DTYPE *centData,
+                                DTYPE *maxDrift,
+                                const int numPnt,
+                                const int numCent,
+                                const int numGrp,
+                                const int numDim,
+                                unsigned long long int *calcCount)
 {
   unsigned int tid=threadIdx.x+(blockIdx.x*BLOCKSIZE);
   if(tid >= numPnt)
@@ -1063,8 +1064,7 @@ __global__ void assignPointsSuper(PointInfo *pointInfo,
     // tighten upper bound
     pointInfo[tid].uprBound =
       calcDis(&pointData[tid * numDim],
-              &centData[pointInfo[tid].centroidIndex * numDim],
-              numDim);
+              &centData[pointInfo[tid].centroidIndex * numDim],numDim);
     atomicAdd(calcCount, 1);
 
     if(pointLwrs[(tid * numGrp)] < pointInfo[tid].uprBound)
@@ -1081,7 +1081,6 @@ __global__ void assignPointsSuper(PointInfo *pointInfo,
         compDistance = calcDis(&pointData[tid * numDim],
                                &centData[centIndex * numDim],
                                numDim);
-        atomicAdd(calcCount, 1);
 
         if(compDistance < pointInfo[tid].uprBound)
         {
@@ -1139,10 +1138,10 @@ __device__ void pointCalcsFull(PointInfo *pointInfoPtr,
       pointLwrPtr[grpIndex] = INFINITY;
 
       if(grpIndex == centInfo[pointInfoPtr->oldCentroid].groupNum &&
-         pointInfoPtr->oldCentroid != pointInfoPtr->centroidIndex)
+        pointInfoPtr->oldCentroid != pointInfoPtr->centroidIndex)
       pointLwrPtr[centInfo[pointInfoPtr->oldCentroid].groupNum] = oldCentUpr;
 
-      // loop through all the group's clusters
+      // loop through all the group's centroids
       for(centIndex = 0; centIndex < numCent; centIndex++)
       {
         // if the cluster is the cluster already assigned
@@ -1158,14 +1157,11 @@ __device__ void pointCalcsFull(PointInfo *pointInfoPtr,
           continue;
 
           // perform distance calculation
-          compDistance = calcDis(pointDataPtr,
-                                 &centData[centIndex * numDim], numDim);
-          atomicAdd(calcCount, 1);
+          compDistance = calcDis(pointDataPtr, &centData[centIndex * numDim], numDim);
 
           if(compDistance < pointInfoPtr->uprBound)
           {
-            pointLwrPtr[centInfo[pointInfoPtr->centroidIndex].groupNum] =
-              pointInfoPtr->uprBound;
+            pointLwrPtr[centInfo[pointInfoPtr->centroidIndex].groupNum] = pointInfoPtr->uprBound;
             pointInfoPtr->centroidIndex = centIndex;
             pointInfoPtr->uprBound = compDistance;
           }
@@ -1230,3 +1226,4 @@ __device__ void pointCalcsSimple(PointInfo *pointInfoPtr,
     }
   }
 }
+
