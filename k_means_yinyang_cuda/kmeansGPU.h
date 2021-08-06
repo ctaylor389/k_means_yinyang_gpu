@@ -92,4 +92,52 @@ void warmupGPU();
 
 void warmupGPU(const int numGPU);
 
+
+double startFullOnGPU(PointInfo *pointInfo,
+                    CentInfo *centInfo,
+                    DTYPE *pointData,
+                    DTYPE *centData,
+                    const int numPnt,
+                    const int numCent,
+                    const int numGrp,
+                    const int numDim,
+                    const int maxIter,
+                    unsigned int *ranIter,
+                    unsigned long long int *countPtr);
+
+double startSimpleOnGPU(PointInfo *pointInfo,
+                      CentInfo *centInfo,
+                      DTYPE *pointData,
+                      DTYPE *centData,
+                      const int numPnt,
+                      const int numCent,
+                      const int numGrp,
+                      const int numDim,
+                      const int maxIter,
+                      const int numGPU,
+                      unsigned int *ranIter,
+                      unsigned long long int *countPtr);
+
+double startSuperOnGPU(PointInfo *pointInfo,
+                     CentInfo *centInfo,
+                     DTYPE *pointData,
+                     DTYPE *centData,
+                     const int numPnt,
+                     const int numCent,
+                     const int numDim,
+                     const int maxIter,
+                     unsigned int *ranIter,
+                     unsigned long long int *countPtr);
+
+double startLloydOnGPU(PointInfo *pointInfo,
+                     CentInfo *centInfo,
+                     DTYPE *pointData,
+                     DTYPE *centData,
+                     const int numPnt,
+                     const int numCent,
+                     const int numDim,
+                     const int maxIter,
+                     unsigned int *ranIter,
+                     unsigned long long int *countPtr);
+
 #endif

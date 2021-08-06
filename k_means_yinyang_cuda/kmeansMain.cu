@@ -208,7 +208,7 @@ int main(int argc, char *argv[])
 
   unsigned int ranIter;
 
-
+  
   //import and create dataset
   PointInfo *pointInfo = (PointInfo *)malloc(sizeof(PointInfo) * numPnt);
   DTYPE *pointData = (DTYPE *)malloc(sizeof(DTYPE) * numPnt * numDim);
@@ -309,3 +309,5 @@ int main(int argc, char *argv[])
 
   return 0;
 }
+
+

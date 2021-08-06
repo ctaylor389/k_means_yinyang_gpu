@@ -26,6 +26,24 @@ typedef enum{
 
 int runValidationTests(ImpType impCode);
 
+TestError chooseAndRunImp(ImpType imp,
+                          PointInfo **pointInfo,
+                          CentInfo **centInfo,
+                          DTYPE **pointData,
+                          DTYPE **centData,
+                          const int numPnt,
+                          const int numCent,
+                          const int numGrp,
+                          const int numDim,
+                          const int maxIter,
+                          const int numThread,
+                          const int numGPU,
+                          double *runtime,
+                          unsigned int *ranIter,
+                          const char *filepath,
+                          const char *writefile,
+                          unsigned long long int *countPtr);
+
 TestError timeImp(ImpType timedImp, 
                   const int numPnt,
                   const int numCent, 
@@ -48,7 +66,8 @@ TestError testImpWithKeyImp(ImpType keyImp,
                             const int numThread,
                             const int numGPU,
                             DTYPE tolerance,
-                            const char *filepath);
+                            const char *filepath,
+                            const int countFlag);
 
 TestError testImpWithKeyFile(ImpType testImp,
                              const int numPnt,
@@ -80,6 +99,9 @@ TestError validateDataImport(const char *inputfname,
                              const char *outputfname, 
                              const int numPnt,
                              const int numDim);
+                             
+
+void printImpName(ImpType imp);
 
 
 #define MSD_PATH "/data/real/YearPredictionMSD.txt"
@@ -99,5 +121,7 @@ TestError validateDataImport(const char *inputfname,
 #define HIGG_PATH "/data/higgs/higgs_normalize_0_1.txt"
 #define HIGG_SIZE 11000000
 #define HIGG_DIM 28
+
+#define THIRTY_TWO_PATH "/home/ctaylor/data/synthetic/dataset_fixed_len_pts_expo_NDIM_32_pts_1000000.txt"
 
 #endif

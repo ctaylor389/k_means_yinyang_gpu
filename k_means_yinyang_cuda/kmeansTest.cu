@@ -11,13 +11,13 @@ int runValidationTests(ImpType impCode)
   
   TestError testResult;
   
-  for(int i = 0; i < 2; i++)
+  for(int i = 0; i < 1; i++)
   {
     printf("\n");
     
     printf("Starting Test %d with data at ", testCounter);
     testResult = testImpWithKeyImp(LLOYDGPU, impCode, 1000000, 200, 20, 
-                                   32, 500, 16, 1, 0.0001, "/home/ctaylor/data/synthetic/dataset_fixed_len_pts_expo_NDIM_32_pts_1000000.txt");
+                                   32, 500, 16, 1, 0.0001, THIRTY_TWO_PATH, 1);
     printErrorMessage(testResult, testCounter);
     testCounter++;
     printf("\n");
@@ -29,6 +29,144 @@ int runValidationTests(ImpType impCode)
   return failFlag;
   
 }
+
+// handles all build up and teardown of an implementation
+// mainly to avoid the switch statements in a hundred different functions
+// data structure arguments are double pointers to allow the function to handle mem allocation
+  // but also let it pass the info back afterwards (i.e. caller must handle freeing this memory)
+TestError chooseAndRunImp(ImpType imp,
+                          PointInfo **pointInfo,
+                          CentInfo **centInfo,
+                          DTYPE **pointData,
+                          DTYPE **centData,
+                          const int numPnt,
+                          const int numCent,
+                          const int numGrp,
+                          const int numDim,
+                          const int maxIter,
+                          const int numThread,
+                          const int numGPU,
+                          double *runtime,
+                          unsigned int *ranIter,
+                          const char *filepath,
+                          const char *writefile,
+                          unsigned long long int *countPtr)
+{
+  
+  if(*pointInfo == NULL)
+  *pointInfo = (PointInfo *)malloc(sizeof(PointInfo) * numPnt);
+
+  if(*pointData == NULL)
+  *pointData = (DTYPE *)malloc(sizeof(DTYPE) * numPnt * numDim);
+
+  // import dataset
+  if(importPoints(filepath, *pointInfo, *pointData, numPnt, numDim))
+  return importError;
+
+  if(*centInfo == NULL)
+  *centInfo = (CentInfo *)malloc(sizeof(CentInfo) * numCent);
+
+  if(*centData == NULL)
+  *centData = (DTYPE *)malloc(sizeof(DTYPE) * numCent * numDim);
+
+  if(generateCentWithData(*centInfo, *centData, *pointData, numCent, numPnt, numDim))
+  return centGenError;
+  
+  
+  if(countPtr == NULL)
+  {
+    switch(imp)
+    {
+      case FULLGPU:
+        warmupGPU();
+        *runtime = startFullOnGPU(*pointInfo, *centInfo, *pointData, *centData,
+                       numPnt, numCent, numGrp, numDim, maxIter, ranIter);
+        break;
+      case SIMPLEGPU:
+        warmupGPU();
+        *runtime = startSimpleOnGPU(*pointInfo, *centInfo, *pointData, *centData,
+                         numPnt, numCent, numGrp, numDim, maxIter, ranIter);
+        break;
+      case SUPERGPU:
+        warmupGPU();
+        *runtime = startSuperOnGPU(*pointInfo, *centInfo, *pointData, *centData,
+                        numPnt, numCent, numDim, maxIter, ranIter);
+        break;
+      case LLOYDGPU:
+        warmupGPU();
+        *runtime = startLloydOnGPU(*pointInfo, *centInfo, *pointData, *centData,
+                        numPnt, numCent, numDim, maxIter, ranIter);
+        break;
+      case FULLCPU:
+        *runtime = startFullOnCPU(*pointInfo, *centInfo, *pointData, *centData, numPnt, 
+                       numCent, numGrp, numDim, numThread, maxIter, ranIter);
+        break;
+      case SIMPLECPU:
+        *runtime = startSimpleOnCPU(*pointInfo, *centInfo, *pointData, *centData, numPnt, 
+                         numCent, numGrp, numDim, numThread, maxIter, ranIter);
+        break;
+      case SUPERCPU:
+        *runtime = startSuperOnCPU(*pointInfo, *centInfo, *pointData, *centData,
+                        numPnt, numCent, numDim, numThread, maxIter, ranIter);
+        break;
+      case LLOYDCPU:
+        *runtime = startLloydOnCPU(*pointInfo, *centInfo, *pointData, *centData,
+                        numPnt, numCent, numDim, numThread, maxIter, ranIter);
+        break;
+      default: 
+        return unknownImpError;
+    }
+    
+  }
+  else
+  { 
+    switch(imp)
+    {
+      case FULLGPU:
+        warmupGPU();
+        *runtime = startFullOnGPU(*pointInfo, *centInfo, *pointData, *centData, numPnt,
+                       numCent, numGrp, numDim, maxIter, ranIter, countPtr);
+        break;
+      case SIMPLEGPU:
+        warmupGPU();
+        *runtime = startSimpleOnGPU(*pointInfo, *centInfo, *pointData, *centData, numPnt, 
+                         numCent, numGrp, numDim, maxIter, numGPU, ranIter, countPtr);
+        break;
+      case SUPERGPU:
+        warmupGPU();
+        *runtime = startSuperOnGPU(*pointInfo, *centInfo, *pointData, *centData,
+                        numPnt, numCent, numDim, maxIter, ranIter, countPtr);
+        break;
+      case LLOYDGPU:
+        warmupGPU();
+        *runtime = startLloydOnGPU(*pointInfo, *centInfo, *pointData, *centData,
+                        numPnt, numCent, numDim, maxIter, ranIter, countPtr);
+        break;
+      case FULLCPU:
+        *runtime = startFullOnCPU(*pointInfo, *centInfo, *pointData, *centData, 
+                       numPnt, numCent, numGrp, numDim, numThread, maxIter, ranIter);
+        break;
+      case SIMPLECPU:
+        *runtime = startSimpleOnCPU(*pointInfo, *centInfo, *pointData, *centData,
+                         numPnt, numCent, numGrp, numDim, numThread, maxIter, ranIter);
+        break;
+      case SUPERCPU:
+        *runtime = startSuperOnCPU(*pointInfo, *centInfo, *pointData, *centData,
+                        numPnt, numCent, numDim, numThread, maxIter, ranIter);
+        break;
+      case LLOYDCPU:
+        *runtime = startLloydOnCPU(*pointInfo, *centInfo, *pointData, *centData,
+                        numPnt, numCent, numDim, numThread, maxIter, ranIter);
+        break;
+      default: 
+        return unknownImpError;
+    }
+  }
+  
+
+  return testSuccess;
+}
+
 
 TestError timeImp(ImpType timedImp, 
                   const int numPnt,
@@ -126,13 +264,26 @@ TestError testImpWithKeyImp(ImpType keyImp,
                             const int numThread,
                             const int numGPU,
                             DTYPE tolerance,
-                            const char *filepath)
+                            const char *filepath,
+                            const int countFlag)
 {
-  printf("%s", filepath);
+  printf("Filepath: %s\n", filepath);
   double keyRuntime;
   double testRuntime;
   unsigned int keyRanIter;
   unsigned int testRanIter;
+  
+  unsigned long long int keyCount = 0;
+  unsigned long long int testCount = 0;
+  
+  unsigned long long int *keyCountPtr = NULL;
+  unsigned long long int *testCountPtr = NULL;
+  
+  if(countFlag)
+  {
+    keyCountPtr = &keyCount;
+    testCountPtr = &testCount;
+  }
   
   printTestParameters(keyImp,testImp,numPnt,numCent,
                       numGrp,numDim,maxIter, 
@@ -140,7 +291,7 @@ TestError testImpWithKeyImp(ImpType keyImp,
   
 
   // create necessary data structures
-  PointInfo *keyPointInfo = (PointInfo *)malloc(sizeof(PointInfo) * numPnt);
+  /*PointInfo *keyPointInfo = (PointInfo *)malloc(sizeof(PointInfo) * numPnt);
   DTYPE *pointData = (DTYPE *)malloc(sizeof(DTYPE) * numPnt * numDim);
 
   // import dataset
@@ -213,107 +364,55 @@ TestError testImpWithKeyImp(ImpType keyImp,
       free(keyCentInfo);
       free(keyCentData);
       return unknownImpError;
-  }
+  }*/
+  DTYPE *pointData = NULL;
   
+  PointInfo *keyPointInfo = NULL;
+  CentInfo *keyCentInfo = NULL;
+  DTYPE *keyCentData = NULL;
+  printf("  Starting "); printImpName(keyImp); printf("\n");
+  
+  chooseAndRunImp(keyImp, &keyPointInfo, &keyCentInfo, &pointData, &keyCentData,
+                  numPnt, numCent, numGrp, numDim, maxIter, numThread, numGPU,
+                  &keyRuntime, &keyRanIter, filepath, NULL, keyCountPtr);
+  
+  printf("  "); printImpName(testImp); printf(" complete\n");
+
   printf("  Key Implementation runtime: %f\n", keyRuntime);
-
-  // create necessary data structures
-  PointInfo *testPointInfo = (PointInfo *)malloc(sizeof(PointInfo) * numPnt);
-
-  // import dataset
-  if(importPoints(filepath, testPointInfo, pointData, numPnt, numDim))
-  return importError;
-
-  CentInfo *testCentInfo = (CentInfo *)malloc(sizeof(CentInfo) * numCent);
-  DTYPE *testCentData = (DTYPE *)malloc(sizeof(DTYPE) * numCent * numDim);
-
-  if(generateCentWithData(testCentInfo, testCentData, pointData, numCent, numPnt, numDim))
-  return centGenError;
-
-  switch(testImp)
-  {
-    case FULLGPU:
-      warmupGPU();
-      printf("  Starting Full GPU\n");
-      testRuntime = startFullOnGPU(testPointInfo, testCentInfo, pointData, testCentData,
-                                  numPnt, numCent, numGrp, numDim, maxIter, &testRanIter);
-      printf("  Full GPU complete\n");
-      break;
-    case SIMPLEGPU:
-      warmupGPU();
-      printf("  Starting Simplified GPU\n");
-      testRuntime = startSimpleOnGPU(testPointInfo, testCentInfo, pointData, testCentData,
-                                    numPnt, numCent, numGrp, numDim, maxIter, numGPU, &testRanIter);
-      printf("  Simplified GPU complete\n");
-      break;
-    case SUPERGPU:
-      warmupGPU();
-      printf("  Starting Super Simplified GPU\n");
-      testRuntime = startSuperOnGPU(testPointInfo, testCentInfo, pointData, testCentData,
-                                   numPnt, numCent, numDim, maxIter, &testRanIter);
-      printf("  Super Simplified GPU complete\n");
-      break;
-    case LLOYDGPU:
-      warmupGPU();
-      printf("  Starting Lloyd GPU\n");
-      testRuntime = startLloydOnGPU(testPointInfo, testCentInfo, pointData, testCentData,
-                                   numPnt, numCent, numDim, maxIter, &testRanIter);
-      printf("  Lloyd GPU complete\n");
-      break;
-    case FULLCPU:
-      printf("  Starting Full CPU\n");
-      testRuntime = startFullOnCPU(testPointInfo, testCentInfo, pointData, testCentData,
-                              numPnt, numCent, numGrp, numDim, numThread, maxIter, &testRanIter);
-      printf("  Full CPU complete\n");
-      break;
-    case SIMPLECPU:
-      printf("  Starting Simplified CPU\n");
-      testRuntime = startSimpleOnCPU(testPointInfo, testCentInfo, pointData, testCentData,
-                              numPnt, numCent, numGrp, numDim, numThread, maxIter, &testRanIter);
-      printf("  Simplified CPU complete\n");
-      break;
-    case SUPERCPU:
-      printf("  Starting Super Simplified CPU\n");
-      testRuntime = startSuperOnCPU(testPointInfo, testCentInfo, pointData, testCentData,
-                              numPnt, numCent, numDim, numThread, maxIter, &testRanIter);
-      printf("  Super Simplified CPU complete\n");
-      break;
-    case LLOYDCPU:
-      printf("  Starting Lloyd CPU\n");
-      testRuntime = startLloydOnCPU(testPointInfo, testCentInfo, pointData, testCentData,
-                              numPnt, numCent, numDim, numThread, maxIter, &testRanIter);
-      printf("  Lloyd CPU complete\n");
-      break;
-    default: 
-        free(keyPointInfo);
-        free(pointData);
-        free(keyCentInfo);
-        free(keyCentData);
-        free(testPointInfo);
-        free(testCentInfo);
-        free(testCentData);
-        return unknownImpError;
-  }
+  printf("  Key iterations ran: %d\n", keyRanIter);
+  printf("  Key distance calculations: %llu\n", keyCount);
+  
+  PointInfo *testPointInfo = NULL;
+  CentInfo *testCentInfo = NULL;
+  DTYPE *testCentData = NULL;
+  printf("  Starting "); printImpName(testImp); printf("\n");
+  
+  chooseAndRunImp(testImp, &testPointInfo, &testCentInfo, &pointData, &testCentData,
+                  numPnt, numCent, numGrp, numDim, maxIter, numThread, numGPU,
+                  &testRuntime, &testRanIter, filepath, NULL, testCountPtr);
+  
+  printf("  "); printImpName(testImp); printf(" complete\n");
 
   printf("  Test Implementation runtime: %f\n", testRuntime);
+  printf("  Test iterations ran: %d\n", testRanIter);
+  printf("  Test distance calculations: %llu\n", testCount);
 
   int centResult = compareData(keyCentData, testCentData, tolerance, numCent, numDim);
   
   int assignResult = compareAssign(keyPointInfo, testPointInfo, numPnt);
   
   free(keyPointInfo);
-  free(pointData);
   free(keyCentInfo);
   free(keyCentData);
   free(testPointInfo);
   free(testCentInfo);
   free(testCentData);
+  free(pointData);
  
   printf("  Found %d mismatching point assignments\n", assignResult);
  
   if(assignResult)
   return testFailedAssign;
-  
   
   if(centResult)
   return testFailedCent;
@@ -546,6 +645,40 @@ TestError validateDataImport(const char *inputfname,
   
   return testSuccess;
   
+}
+
+void printImpName(ImpType imp)
+{
+  switch(imp)
+  {
+    case FULLGPU:
+      printf("Yinyang Full GPU");
+      break;
+    case SIMPLEGPU:
+      printf("Yinyang Simplified GPU");
+      break;
+    case SUPERGPU:
+      printf("Yinyang Super Simplified GPU");
+      break;
+    case LLOYDGPU:
+      printf("Lloyd's GPU");
+      break;
+    case FULLCPU:
+      printf("Yinyang Full CPU");
+      break;
+    case SIMPLECPU:
+      printf("Yinyang Simplified CPU");
+      break;
+    case SUPERCPU:
+      printf("Yinyang Super Simplified CPU");
+      break;
+    case LLOYDCPU:
+      printf("Lloyd's CPU");
+      break;
+    default:
+      printf("Unknown Implementation");
+      break;
+  }
 }
 
 
