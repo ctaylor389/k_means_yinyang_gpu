@@ -849,7 +849,7 @@ __global__ void initRunKernel(PointInfo *pointInfo,
     currDistance = calcDis(&pointData[tid * numDim],
                            &centData[centIndex * numDim],
                            numDim);
-    //atomicAdd(calcCount, 1);
+    atomicAdd(calcCount, 1);
     if(currDistance < pointInfo[tid].uprBound)
     {
       // make the former current min the new
@@ -1003,7 +1003,7 @@ __global__ void assignPointsSimple(PointInfo *pointInfo,
         calcDis(&pointData[tid * numDim],
                 &centData[pointInfo[tid].centroidIndex * numDim],
                 numDim);
-    //atomicAdd(calcCount, 1);
+    atomicAdd(calcCount, 1);
 
     // if the lower bound is less than the upper bound
     if(tmpGlobLwr < pointInfo[tid].uprBound)
@@ -1022,7 +1022,7 @@ __global__ void assignPointsSimple(PointInfo *pointInfo,
       // execute point calcs given the groups
       pointCalcsSimple(&pointInfo[tid],centInfo,&pointData[tid * numDim],
                        &pointLwrs[tid * numGrp], centData, maxDriftArr,
-                       &groupLclArr[btid * numGrp], numPnt, numCent, numGrp, numDim);
+                       &groupLclArr[btid * numGrp], numPnt, numCent, numGrp, numDim, calcCount);
     }
 
   }
@@ -1081,6 +1081,8 @@ __global__ void assignPointsSuper(PointInfo *pointInfo,
         compDistance = calcDis(&pointData[tid * numDim],
                                &centData[centIndex * numDim],
                                numDim);
+
+        atomicAdd(calcCount, 1);
 
         if(compDistance < pointInfo[tid].uprBound)
         {
@@ -1210,7 +1212,7 @@ __device__ void pointCalcsSimple(PointInfo *pointInfoPtr,
       compDistance = calcDis(pointDataPtr,
                              &centData[index * numDim],
                              numDim);
-      //atomicAdd(calcCount, 1);
+      atomicAdd(calcCount, 1);
 
       if(compDistance < pointInfoPtr->uprBound)
       {

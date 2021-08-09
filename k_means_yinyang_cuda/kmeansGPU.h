@@ -68,6 +68,17 @@ double startSuperOnGPU(PointInfo *pointInfo,
                         const int maxIter,
                         unsigned int *ranIter);
 
+double startSuperOnGPU(PointInfo *pointInfo,
+                     CentInfo *centInfo,
+                     DTYPE *pointData,
+                     DTYPE *centData,
+                     const int numPnt,
+                     const int numCent,
+                     const int numDim,
+                     const int maxIter,
+                     const int numGPU,
+                     unsigned int *ranIter);
+                     
 double startLloydOnGPU(PointInfo *pointInfo,
                        CentInfo *centInfo,
                        DTYPE *pointData,

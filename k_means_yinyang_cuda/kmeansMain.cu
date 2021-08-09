@@ -258,7 +258,7 @@ int main(int argc, char *argv[])
       warmupGPU();
       runtime =
         startSuperOnGPU(pointInfo, centInfo, pointData, centData,
-                        numPnt, numCent, numDim, maxIter, &ranIter);
+                        numPnt, numCent, numDim, maxIter, numGPU, &ranIter);
       break;
     case LLOYDGPU:
       warmupGPU();
