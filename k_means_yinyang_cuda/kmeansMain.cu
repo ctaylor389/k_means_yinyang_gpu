@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
   //
   // Optional Flags:
   // -t  <number_of_groups>      (Must be <= number of clusters. Default = 20 for GPU, k/10 for CPU)
-  // -c                          (count distance calculations)
+  // -c  <0_or_1>                (count distance calculations. Default is 0, which does not count distance calculations)
   // -m  <number_of_CPU_threads> (Default is 1)
   // -i  <max_iterations_to_run> (Default is 1000)
   // -g  <number_of_GPUs>        (Default is 1)
@@ -43,6 +43,7 @@ int main(int argc, char *argv[])
              "\n"
              "// Optional Flags:\n"
              "// -t  <number_of_groups>      (Must be <= number of clusters. Default = 20 for GPU, k/10 for CPU)\n"
+             "// -c  <0_or_1>                (count distance calculations. Default is 0, which does not count distance calculations)\n"
              "// -m  <number_of_CPU_threads> (Default is 1)\n"
              "// -i  <max_iterations_to_run> (Default is 1000)\n"
              "// -g  <number_of_GPUs>        (Default is 1)\n"
@@ -95,6 +96,8 @@ int main(int argc, char *argv[])
   char *writeCentPath;
   char *writeAssignPath;
   char *writeTimePath;
+  int countFlag = 0;
+  unsigned long long int calcCount = 0;
 
 
   //Read in parameters from file:
@@ -114,7 +117,8 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-
+  char impStr[50];
+  strcpy(impStr, argv[1]);
 
   char datasetPath[200];
   strcpy(datasetPath, argv[2]);
@@ -189,6 +193,15 @@ int main(int argc, char *argv[])
         return 1;
       }
     }
+    else if(!strcmp(argv[i],"-c") && i+1 < argc)
+    {
+      countFlag = atoi(argv[i+1]);
+      if(countFlag != 0 && countFlag != 1)
+      {
+        printf("Error: Invalid count flag. Exiting...\n");
+        return 1;
+      }
+    }
     else if(!strcmp(argv[i],"-wc") && i+1 < argc)
     {
       writeCentFlag = 1;
@@ -239,59 +252,120 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  switch(impCode)
+  if (countFlag)
   {
-    case FULLGPU:
-      warmupGPU();
-      runtime =
-        startFullOnGPU(pointInfo, centInfo, pointData, centData,
-                       numPnt, numCent, numGrp, numDim, maxIter, &ranIter);
-      break;
-    case SIMPLEGPU:
-      warmupGPU(numGPU);
-      runtime =
-        startSimpleOnGPU(pointInfo, centInfo, pointData, centData,
-                         numPnt, numCent, numGrp, numDim, maxIter, numGPU,
-                         &ranIter);
-      break;
-    case SUPERGPU:
-      warmupGPU();
-      runtime =
-        startSuperOnGPU(pointInfo, centInfo, pointData, centData,
-                        numPnt, numCent, numDim, maxIter, numGPU, &ranIter);
-      break;
-    case LLOYDGPU:
-      warmupGPU();
-      runtime =
-        startLloydOnGPU(pointInfo, centInfo, pointData, centData,
-                        numPnt, numCent, numDim, maxIter, &ranIter);
-      break;
-    case FULLCPU:
-      runtime =
-        startFullOnCPU(pointInfo, centInfo, pointData, centData, numPnt,
-                       numCent, numGrp, numDim, numThread, maxIter, &ranIter);
-      break;
-    case SIMPLECPU:
-      runtime =
-        startSimpleOnCPU(pointInfo, centInfo, pointData, centData, numPnt,
-                         numCent, numGrp, numDim, numThread, maxIter, &ranIter);
-      break;
-    case SUPERCPU:
-      runtime =
-        startSuperOnCPU(pointInfo, centInfo, pointData, centData,
-                        numPnt, numCent, numDim, numThread, maxIter, &ranIter);
-      break;
-    case LLOYDCPU:
-      runtime =
-        startLloydOnCPU(pointInfo, centInfo, pointData, centData,
-                        numPnt, numCent, numDim, numThread, maxIter, &ranIter);
-      break;
-    default:
-      free(pointInfo);
-      free(pointData);
-      free(centInfo);
-      free(centData);
-      return unknownImpError;
+    switch(impCode)
+    {
+      case FULLGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startFullOnGPU(pointInfo, centInfo, pointData, centData,
+                        numPnt, numCent, numGrp, numDim, maxIter, numGPU, &ranIter, &calcCount);
+        break;
+      case SIMPLEGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startSimpleOnGPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numGrp, numDim, maxIter, numGPU,
+                          &ranIter, &calcCount);
+        break;
+      case SUPERGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startSuperOnGPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, maxIter, numGPU, &ranIter, &calcCount);
+        break;
+      case LLOYDGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startLloydOnGPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, maxIter, &ranIter, &calcCount);
+        break;
+      case FULLCPU:
+        runtime =
+          startFullOnCPU(pointInfo, centInfo, pointData, centData, numPnt,
+                        numCent, numGrp, numDim, numThread, maxIter, &ranIter);
+        break;
+      case SIMPLECPU:
+        runtime =
+          startSimpleOnCPU(pointInfo, centInfo, pointData, centData, numPnt,
+                          numCent, numGrp, numDim, numThread, maxIter, &ranIter);
+        break;
+      case SUPERCPU:
+        runtime =
+          startSuperOnCPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, numThread, maxIter, &ranIter);
+        break;
+      case LLOYDCPU:
+        runtime =
+          startLloydOnCPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, numThread, maxIter, &ranIter);
+        break;
+      default:
+        free(pointInfo);
+        free(pointData);
+        free(centInfo);
+        free(centData);
+        return unknownImpError;
+    }
+  }
+
+  else
+  {
+    switch(impCode)
+    {
+      case FULLGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startFullOnGPU(pointInfo, centInfo, pointData, centData,
+                        numPnt, numCent, numGrp, numDim, maxIter, numGPU, &ranIter);
+        break;
+      case SIMPLEGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startSimpleOnGPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numGrp, numDim, maxIter, numGPU,
+                          &ranIter);
+        break;
+      case SUPERGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startSuperOnGPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, maxIter, numGPU, &ranIter);
+        break;
+      case LLOYDGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startLloydOnGPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, maxIter, numGPU, &ranIter);
+        break;
+      case FULLCPU:
+        runtime =
+          startFullOnCPU(pointInfo, centInfo, pointData, centData, numPnt,
+                        numCent, numGrp, numDim, numThread, maxIter, &ranIter);
+        break;
+      case SIMPLECPU:
+        runtime =
+          startSimpleOnCPU(pointInfo, centInfo, pointData, centData, numPnt,
+                          numCent, numGrp, numDim, numThread, maxIter, &ranIter);
+        break;
+      case SUPERCPU:
+        runtime =
+          startSuperOnCPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, numThread, maxIter, &ranIter);
+        break;
+      case LLOYDCPU:
+        runtime =
+          startLloydOnCPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, numThread, maxIter, &ranIter);
+        break;
+      default:
+        free(pointInfo);
+        free(pointData);
+        free(centInfo);
+        free(centData);
+        return unknownImpError;
+    }
   }
 
   if(writeCentFlag)
@@ -299,8 +373,8 @@ int main(int argc, char *argv[])
   if(writeAssignFlag)
   writeResults(pointInfo, numPnt, writeAssignPath);
   if(writeTimeFlag)
-  writeTimeData(writeTimePath, &runtime, 1, ranIter,
-                numPnt, numCent, numGrp, numDim, numThread);
+  writeTimeData(writeTimePath, impStr, &runtime, 1, ranIter,
+                numPnt, numCent, numGrp, numDim, numThread, numGPU, calcCount);
 
   free(pointData);
   free(centData);

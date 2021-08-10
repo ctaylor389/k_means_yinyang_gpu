@@ -12,28 +12,17 @@
 #include "kmeansUtil.h"
 #include "omp.h"
 
-
 double startFullOnGPU(PointInfo *pointInfo,
-                      CentInfo *centInfo,
-                      DTYPE *pointData,
-                      DTYPE *centData,
-                      const int numPnt,
-                      const int numCent,
-                      const int numGrp,
-                      const int numDim,
-                      const int maxIter,
-                      unsigned int *ranIter);
-
-double startSimpleOnGPU(PointInfo *pointInfo,
-                        CentInfo *centInfo,
-                        DTYPE *pointData,
-                        DTYPE *centData,
-                        const int numPnt,
-                        const int numCent,
-                        const int numGrp,
-                        const int numDim,
-                        const int maxIter,
-                        unsigned int *ranIter);
+                    CentInfo *centInfo,
+                    DTYPE *pointData,
+                    DTYPE *centData,
+                    const int numPnt,
+                    const int numCent,
+                    const int numGrp,
+                    const int numDim,
+                    const int maxIter,
+                    const int numGPU,
+                    unsigned int *ranIter);
 
 double startSimpleOnGPU(PointInfo *pointInfo,
                         CentInfo *centInfo,
@@ -45,27 +34,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                         const int numDim,
                         const int maxIter,
                         const int numGPU,
-                        unsigned int *ranIter);
-
-void calcWeightedMeans(CentInfo *newCentInfo,
-                       CentInfo **allCentInfo,
-                       DTYPE *newCentData,
-                       DTYPE *oldCentData,
-                       DTYPE **allCentData,
-                       DTYPE *newMaxDriftArr,
-                       const int numCent,
-                       const int numGrp,
-                       const int numDim,
-                       const int numGPU);
-
-double startSuperOnGPU(PointInfo *pointInfo,
-                        CentInfo *centInfo,
-                        DTYPE *pointData,
-                        DTYPE *centData,
-                        const int numPnt,
-                        const int numCent,
-                        const int numDim,
-                        const int maxIter,
                         unsigned int *ranIter);
 
 double startSuperOnGPU(PointInfo *pointInfo,
@@ -89,6 +57,17 @@ double startLloydOnGPU(PointInfo *pointInfo,
                        const int maxIter,
                        unsigned int *ranIter);
 
+double startLloydOnGPU(PointInfo *pointInfo,
+                      CentInfo *centInfo,
+                      DTYPE *pointData,
+                      DTYPE *centData,
+                      const int numPnt,
+                      const int numCent,
+                      const int numDim,
+                      const int maxIter,
+                      const int numGPU,
+                      unsigned int *ranIter);
+
 DTYPE *storeDataOnGPU(DTYPE *data,
                       const int numVec,
                       const int numFeat);
@@ -99,10 +78,7 @@ PointInfo *storePointInfoOnGPU(PointInfo *pointInfo,
 CentInfo *storeCentInfoOnGPU(CentInfo *centInfo,
                              const int numCent);
 
-void warmupGPU();
-
 void warmupGPU(const int numGPU);
-
 
 double startFullOnGPU(PointInfo *pointInfo,
                     CentInfo *centInfo,
@@ -113,6 +89,7 @@ double startFullOnGPU(PointInfo *pointInfo,
                     const int numGrp,
                     const int numDim,
                     const int maxIter,
+                    const int numGPU,
                     unsigned int *ranIter,
                     unsigned long long int *countPtr);
 
@@ -137,6 +114,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
                      const int numCent,
                      const int numDim,
                      const int maxIter,
+                     const int numGPU,
                      unsigned int *ranIter,
                      unsigned long long int *countPtr);
 

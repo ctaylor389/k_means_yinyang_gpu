@@ -21,7 +21,8 @@ DTYPE calcDisCPU(DTYPE *vec1,
 
 
 
-int writeTimeData(const char *fname, 
+int writeTimeData(const char *fname,
+									const char *impStr,
                   double *timeArr,
                   int numRuns, 
                   int totalIter,
@@ -29,7 +30,9 @@ int writeTimeData(const char *fname,
                   int numCent, 
                   int numGrp,
                   int numDim,
-                  int numThread)
+                  int numThread,
+									int numGPU,
+									unsigned long long int calcCount)
 {
 	char writeString[300];
 	FILE *fp;
@@ -49,10 +52,27 @@ int writeTimeData(const char *fname,
   if(!fp)
   return 1;
 
-	sprintf(writeString, "%f,%d,%d,%d,%d,%d,%d\n", 
-          finalTime,totalIter,numPnt,numCent,numGrp,numDim,numThread);
-	fputs(writeString, fp);
+	fseek(fp, 0, SEEK_END);
 
+	if (ftell(fp) == 0) 
+	{
+		sprintf(writeString, "Implementation, Time, Iterations, Points, Centroids, Groups, Dimensions, CPUThreads, GPUs, CountFlag\n");
+		fputs(writeString, fp);
+	}
+
+	if (calcCount)
+	{
+		sprintf(writeString, "%s, %f, %d, %d, %d, %d, %d, %d, %d, %llu\n", 
+          impStr, finalTime, totalIter, numPnt, numCent, numGrp, numDim, numThread, numGPU, calcCount);
+		fputs(writeString, fp);
+	}
+
+	else
+	{
+		sprintf(writeString, "%s, %f, %d, %d, %d, %d, %d, %d, %d, %s\n", 
+          impStr, finalTime, totalIter, numPnt, numCent, numGrp, numDim, numThread, numGPU, "N/A");
+		fputs(writeString, fp);
+	}
 	
 	fclose(fp);
 	return 0;
@@ -412,4 +432,155 @@ int compareAssign(PointInfo *info1,
     mismatch++;
   }
   return mismatch;
+}
+
+void calcWeightedMeans(CentInfo *newCentInfo,
+                       CentInfo **allCentInfo,
+                       DTYPE *newCentData,
+                       DTYPE *oldCentData,
+                       DTYPE **allCentData,
+                       DTYPE *newMaxDriftArr,
+                       const int numCent,
+                       const int numGrp,
+                       const int numDim,
+                       const int numGPU)
+{
+  DTYPE numerator = 0;
+  DTYPE denominator = 0;
+  DTYPE zeroNumerator = 0;
+  int zeroCount = 0;
+
+  for (int i = 0; i < numCent; i++)
+  {
+      for (int j = 0; j < numDim; j++)
+      {
+          oldCentData[(i * numDim) + j] = newCentData[(i * numDim) + j];
+      }
+  }
+
+  for (int i = 0; i < numGPU; i++)
+  {
+      for (int j = 0; j < numCent; j++)
+      {
+        newCentInfo[j].count += allCentInfo[i][j].count;
+
+        newCentInfo[j].groupNum = allCentInfo[0][j].groupNum;
+      }
+  }
+
+  for (int j = 0; j < numCent; j++)
+  {
+      for (int k = 0; k < numDim; k++)
+      {
+          for (int l = 0; l < numGPU; l++)
+          {
+              if (allCentInfo[l][j].count == 0)
+              {
+                  zeroCount++;
+                  zeroNumerator += allCentData[l][(j * numDim) + k];
+              }
+
+              numerator +=
+              allCentData[l][(j * numDim) + k]*allCentInfo[l][j].count;
+
+              denominator += allCentInfo[l][j].count;
+          }
+
+          if (denominator != 0)
+          {
+              newCentData[(j * numDim) + k] = numerator/denominator;
+          }
+
+          else
+          {
+              newCentData[(j * numDim) + k] = zeroNumerator/zeroCount;
+          }
+
+          zeroCount = 0;
+          zeroNumerator = 0;
+          numerator = 0;
+          denominator = 0;
+      }
+
+      newCentInfo[j].drift = calcDisCPU(&newCentData[j*numDim],
+                                           &oldCentData[j*numDim],
+                                           numDim);
+
+      if (newCentInfo[j].drift > newMaxDriftArr[newCentInfo[j].groupNum])
+        {
+          newMaxDriftArr[newCentInfo[j].groupNum] = newCentInfo[j].drift;
+        }
+  }
+}
+
+void calcWeightedMeansLloyd(CentInfo *newCentInfo,
+                       CentInfo **allCentInfo,
+                       DTYPE *newCentData,
+                       DTYPE *oldCentData,
+                       DTYPE **allCentData,
+                       const int numCent,
+                       const int numDim,
+                       const int numGPU)
+{
+  DTYPE numerator = 0;
+  DTYPE denominator = 0;
+  DTYPE zeroNumerator = 0;
+  int zeroCount = 0;
+
+  for (int i = 0; i < numCent; i++)
+  {
+      for (int j = 0; j < numDim; j++)
+      {
+          oldCentData[(i * numDim) + j] = newCentData[(i * numDim) + j];
+      }
+  }
+
+  for (int i = 0; i < numGPU; i++)
+  {
+      for (int j = 0; j < numCent; j++)
+      {
+        newCentInfo[j].count += allCentInfo[i][j].count;
+
+        newCentInfo[j].groupNum = allCentInfo[0][j].groupNum;
+      }
+  }
+
+  for (int j = 0; j < numCent; j++)
+  {
+      for (int k = 0; k < numDim; k++)
+      {
+          for (int l = 0; l < numGPU; l++)
+          {
+              if (allCentInfo[l][j].count == 0)
+              {
+                  zeroCount++;
+                  zeroNumerator += allCentData[l][(j * numDim) + k];
+              }
+
+              numerator +=
+              allCentData[l][(j * numDim) + k]*allCentInfo[l][j].count;
+
+              denominator += allCentInfo[l][j].count;
+          }
+
+          if (denominator != 0)
+          {
+              newCentData[(j * numDim) + k] = numerator/denominator;
+          }
+
+          else
+          {
+              newCentData[(j * numDim) + k] = zeroNumerator/zeroCount;
+          }
+
+          zeroCount = 0;
+          zeroNumerator = 0;
+          numerator = 0;
+          denominator = 0;
+      }
+
+      newCentInfo[j].drift = calcDisCPU(&newCentData[j*numDim],
+                                           &oldCentData[j*numDim],
+                                           numDim);
+  }
 }

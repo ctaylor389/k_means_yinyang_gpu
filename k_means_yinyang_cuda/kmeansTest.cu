@@ -78,22 +78,22 @@ TestError chooseAndRunImp(ImpType imp,
     switch(imp)
     {
       case FULLGPU:
-        warmupGPU();
+        warmupGPU(numGPU);
         *runtime = startFullOnGPU(*pointInfo, *centInfo, *pointData, *centData,
-                       numPnt, numCent, numGrp, numDim, maxIter, ranIter);
+                       numPnt, numCent, numGrp, numDim, maxIter, numGPU, ranIter);
         break;
       case SIMPLEGPU:
-        warmupGPU();
+        warmupGPU(numGPU);
         *runtime = startSimpleOnGPU(*pointInfo, *centInfo, *pointData, *centData,
-                         numPnt, numCent, numGrp, numDim, maxIter, ranIter);
+                         numPnt, numCent, numGrp, numDim, maxIter, numGPU, ranIter);
         break;
       case SUPERGPU:
-        warmupGPU();
+        warmupGPU(numGPU);
         *runtime = startSuperOnGPU(*pointInfo, *centInfo, *pointData, *centData,
-                        numPnt, numCent, numDim, maxIter, ranIter);
+                        numPnt, numCent, numDim, maxIter, numGPU, ranIter);
         break;
       case LLOYDGPU:
-        warmupGPU();
+        warmupGPU(numGPU);
         *runtime = startLloydOnGPU(*pointInfo, *centInfo, *pointData, *centData,
                         numPnt, numCent, numDim, maxIter, ranIter);
         break;
@@ -123,22 +123,22 @@ TestError chooseAndRunImp(ImpType imp,
     switch(imp)
     {
       case FULLGPU:
-        warmupGPU();
+        warmupGPU(numGPU);
         *runtime = startFullOnGPU(*pointInfo, *centInfo, *pointData, *centData, numPnt,
-                       numCent, numGrp, numDim, maxIter, ranIter, countPtr);
+                       numCent, numGrp, numDim, maxIter, numGPU, ranIter, countPtr);
         break;
       case SIMPLEGPU:
-        warmupGPU();
+        warmupGPU(numGPU);
         *runtime = startSimpleOnGPU(*pointInfo, *centInfo, *pointData, *centData, numPnt, 
                          numCent, numGrp, numDim, maxIter, numGPU, ranIter, countPtr);
         break;
       case SUPERGPU:
-        warmupGPU();
+        warmupGPU(numGPU);
         *runtime = startSuperOnGPU(*pointInfo, *centInfo, *pointData, *centData,
-                        numPnt, numCent, numDim, maxIter, ranIter, countPtr);
+                        numPnt, numCent, numDim, maxIter, numGPU, ranIter, countPtr);
         break;
       case LLOYDGPU:
-        warmupGPU();
+        warmupGPU(numGPU);
         *runtime = startLloydOnGPU(*pointInfo, *centInfo, *pointData, *centData,
                         numPnt, numCent, numDim, maxIter, ranIter, countPtr);
         break;
@@ -175,6 +175,7 @@ TestError timeImp(ImpType timedImp,
                   const int numDim,
                   const int maxIter, 
                   const int numThread,
+                  const int numGPU,
                   double *runtime,
                   unsigned int *ranIter, 
                   const char *filepath,
@@ -198,22 +199,22 @@ TestError timeImp(ImpType timedImp,
   switch(timedImp)
   {
     case FULLGPU:
-      warmupGPU();
+      warmupGPU(numGPU);
       *runtime = startFullOnGPU(pointInfo,centInfo,pointData,centData,numPnt,
-                                numCent,numGrp,numDim,maxIter,ranIter);
+                                numCent,numGrp,numDim,maxIter,numGPU,ranIter);
       break;
     case SIMPLEGPU:
-      warmupGPU();
+      warmupGPU(numGPU);
       *runtime = startSimpleOnGPU(pointInfo,centInfo,pointData,centData,numPnt,
-                                  numCent,numGrp,numDim,maxIter,ranIter);
+                                  numCent,numGrp,numDim,maxIter,numGPU,ranIter);
       break;
     case SUPERGPU:
-      warmupGPU();
+      warmupGPU(numGPU);
       *runtime = startSuperOnGPU(pointInfo,centInfo,pointData,centData,numPnt,
-                                 numCent,numDim,maxIter,ranIter);
+                                 numCent,numDim,maxIter,numGPU,ranIter);
       break;
     case LLOYDGPU:
-      warmupGPU();
+      warmupGPU(numGPU);
       *runtime = startLloydOnGPU(pointInfo,centInfo,pointData,centData,numPnt,
                                  numCent,numDim,maxIter,ranIter);
       break;
@@ -356,6 +357,7 @@ TestError testImpWithKeyFile(ImpType testImp,
                              const int numDim,
                              const int maxIter, 
                              const int numThread,
+                             const int numGPU,
                              DTYPE tolerance,
                              char *filepath,
                              const char *keyFilepath)
@@ -379,22 +381,22 @@ TestError testImpWithKeyFile(ImpType testImp,
   switch(testImp)
   {
     case FULLGPU:
-      warmupGPU();
+      warmupGPU(numGPU);
       startFullOnGPU(pointInfo, centInfo, pointData, centData,
-                     numPnt, numCent, numGrp, numDim, maxIter, &ranIter);
+                     numPnt, numCent, numGrp, numDim, maxIter, numGPU, &ranIter);
       break;
     case SIMPLEGPU:
-      warmupGPU();
+      warmupGPU(numGPU);
       startSimpleOnGPU(pointInfo, centInfo, pointData, centData,
-                       numPnt, numCent, numGrp, numDim, maxIter, &ranIter);
+                       numPnt, numCent, numGrp, numDim, maxIter, numGPU, &ranIter);
       break;
     case SUPERGPU:
-      warmupGPU();
+      warmupGPU(numGPU);
       startSuperOnGPU(pointInfo, centInfo, pointData, centData,
-                      numPnt, numCent, numDim, maxIter, &ranIter);
+                      numPnt, numCent, numDim, maxIter, numGPU, &ranIter);
       break;
     case LLOYDGPU:
-      warmupGPU();
+      warmupGPU(numGPU);
       startLloydOnGPU(pointInfo, centInfo, pointData, centData,
                       numPnt, numCent, numDim, maxIter, &ranIter);
       break;

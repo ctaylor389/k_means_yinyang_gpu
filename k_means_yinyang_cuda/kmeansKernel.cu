@@ -943,7 +943,7 @@ __global__ void assignPointsFull(PointInfo *pointInfo,
       // execute point calcs given the groups
       pointCalcsFull(&pointInfo[tid], centInfo, &pointData[tid * numDim],
                      &pointLwrs[tid * numGrp], centData, maxDriftArr,
-                     &groupLclArr[btid * numGrp], numPnt, numCent, numGrp, numDim);
+                     &groupLclArr[btid * numGrp], numPnt, numCent, numGrp, numDim, calcCount);
     }
   }
 }
