@@ -579,8 +579,10 @@ void calcWeightedMeansLloyd(CentInfo *newCentInfo,
           denominator = 0;
       }
 
+			/*
       newCentInfo[j].drift = calcDisCPU(&newCentData[j*numDim],
                                            &oldCentData[j*numDim],
                                            numDim);
+			*/
   }
 }

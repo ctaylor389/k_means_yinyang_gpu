@@ -430,13 +430,6 @@ double startFullOnGPU(PointInfo *pointInfo,
     #pragma omp parallel for num_threads(numGPU)
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
-      cudaSetDevice(gpuIter);
-      cudaDeviceSynchronize();
-    }
-
-    #pragma omp parallel for num_threads(numGPU)
-    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-    {
       gpuErrchk(cudaSetDevice(gpuIter));
       assignPointsFull<<<NBLOCKS,BLOCKSIZE,grpLclSize>>>(devPointInfo[gpuIter],
                                                            devCentInfo[gpuIter],
@@ -1010,13 +1003,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                        newMaxDriftArr, numGrp*sizeof(DTYPE),
                                   cudaMemcpyHostToDevice));
       }
-    }
-
-    #pragma omp parallel for num_threads(numGPU)
-    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-    {
-      cudaSetDevice(gpuIter);
-      cudaDeviceSynchronize();
     }
 
     #pragma omp parallel for num_threads(numGPU)
@@ -1602,12 +1588,6 @@ double startSuperOnGPU(PointInfo *pointInfo,
       }
     }
 
-    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-    {
-      cudaSetDevice(gpuIter);
-      cudaDeviceSynchronize();
-    }
-
     #pragma omp parallel for num_threads(numGPU)
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
@@ -2187,18 +2167,10 @@ double startLloydOnGPU(PointInfo *pointInfo,
     #pragma omp parallel for num_threads(numGPU)
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
-      cudaSetDevice(gpuIter);
-      cudaDeviceSynchronize();
-    }
-
-    #pragma omp parallel for num_threads(numGPU)
-    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-    {
       gpuErrchk(cudaSetDevice(gpuIter));
       checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo[gpuIter],
                                            devConFlagArr[gpuIter],
                                            numPnts[gpuIter]);
-
     }
 
     index++;
@@ -2743,13 +2715,6 @@ double startFullOnGPU(PointInfo *pointInfo,
                        newMaxDriftArr, numGrp*sizeof(DTYPE),
                                   cudaMemcpyHostToDevice));
       }
-    }
-
-    #pragma omp parallel for num_threads(numGPU)
-    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-    {
-      cudaSetDevice(gpuIter);
-      cudaDeviceSynchronize();
     }
 
     #pragma omp parallel for num_threads(numGPU)
@@ -3370,13 +3335,6 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                        newMaxDriftArr, numGrp*sizeof(DTYPE),
                                   cudaMemcpyHostToDevice));
       }
-    }
-
-    #pragma omp parallel for num_threads(numGPU)
-    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-    {
-      cudaSetDevice(gpuIter);
-      cudaDeviceSynchronize();
     }
 
     #pragma omp parallel for num_threads(numGPU)
@@ -4005,12 +3963,6 @@ double startSuperOnGPU(PointInfo *pointInfo,
       }
     }
 
-    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-    {
-      cudaSetDevice(gpuIter);
-      cudaDeviceSynchronize();
-    }
-
     #pragma omp parallel for num_threads(numGPU)
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
@@ -4185,136 +4137,6 @@ double startSuperOnGPU(PointInfo *pointInfo,
   free(newCentData);
   free(oldCentData);
   free(pointLwrs);
-
-  endTime = omp_get_wtime();
-  return endTime - startTime;
-}
-
-double startLloydOnGPU(PointInfo *pointInfo,
-                       CentInfo *centInfo,
-                       DTYPE *pointData,
-                       DTYPE *centData,
-                       const int numPnt,
-                       const int numCent,
-                       const int numDim,
-                       const int maxIter,
-                       unsigned int *ranIter,
-                       unsigned long long int *countPtr)
-{
-
-  // start timer
-  double startTime, endTime;
-  startTime = omp_get_wtime();
-  
-  
-
-  // variable initialization
-
-  unsigned int hostConFlag = 1;
-
-  unsigned int *hostConFlagPtr = &hostConFlag;
-
-  int index = 0;
-
-  unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
-
-  // store dataset on device
-  PointInfo *devPointInfo;
-  DTYPE *devPointData;
-
-  devPointInfo = storePointInfoOnGPU(pointInfo, numPnt);
-  devPointData = storeDataOnGPU(pointData, numPnt, numDim);
-
-  // store centroids on device
-  CentInfo *devCentInfo;
-  DTYPE *devCentData;
-
-  devCentInfo = storeCentInfoOnGPU(centInfo, numCent);
-  devCentData = storeDataOnGPU(centData, numCent, numDim);
-
-  // centroid calculation data
-  DTYPE *devNewCentSum = NULL;
-  cudaMalloc(&devNewCentSum, sizeof(DTYPE) * numCent * numDim);
-
-  unsigned int *devNewCentCount = NULL;
-  cudaMalloc(&devNewCentCount, sizeof(unsigned int) * numCent);
-
-  unsigned int *devConFlag = NULL;
-  cudaMalloc(&devConFlag, sizeof(unsigned int));
-
-  gpuErrchk(cudaMemcpy(devConFlag, hostConFlagPtr,
-                         sizeof(unsigned int), cudaMemcpyHostToDevice));
-
-
-  clearCentCalcDataLloyd<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
-                                                 devNewCentCount,
-                                                 numCent,
-                                                 numDim);
-
-
-  // loop until convergence
-  while(hostConFlag && index < maxIter)
-  {
-    hostConFlag = 0;
-
-    gpuErrchk(cudaMemcpy(devConFlag,hostConFlagPtr,
-                         sizeof(unsigned int),cudaMemcpyHostToDevice));
-
-    assignPointsLloyd<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,
-                                              devCentInfo,
-                                              devPointData,
-                                              devCentData,
-                                              numPnt,
-                                              numCent,
-                                              numDim);
-
-    clearCentCalcDataLloyd<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum,
-                                                   devNewCentCount,
-                                                   numCent,
-                                                   numDim);
-    // calculate data necessary to make new centroids
-    calcCentDataLloyd<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,
-                                              devPointData,
-                                              devNewCentSum,
-                                              devNewCentCount,
-                                              numPnt,
-                                              numDim);
-
-    // make new centroids
-    calcNewCentroidsLloyd<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo,
-                                                  devCentInfo,
-                                                  devCentData,
-                                                  devNewCentSum,
-                                                  devNewCentCount,
-                                                  numCent,
-                                                  numDim);
-
-    checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo,devConFlag,numPnt);
-    index++;
-    gpuErrchk(cudaMemcpy(hostConFlagPtr,devConFlag,
-                           sizeof(unsigned int),cudaMemcpyDeviceToHost));
-  }
-  cudaDeviceSynchronize();
-  *countPtr = (unsigned long long int)numPnt * 
-    (unsigned long long int)numCent * (unsigned long long int)index;
-
-  // only need the point info for assignments
-  gpuErrchk(cudaMemcpy(pointInfo, devPointInfo,
-                         sizeof(PointInfo)*numPnt,cudaMemcpyDeviceToHost));
-  // and the final centroid positions
-  gpuErrchk(cudaMemcpy(centData,devCentData,
-                         sizeof(DTYPE)*numDim*numCent,cudaMemcpyDeviceToHost));
-
-  *ranIter = index;
-
-  // clean up, return
-  cudaFree(devPointInfo);
-  cudaFree(devPointData);
-  cudaFree(devCentInfo);
-  cudaFree(devCentData);
-  cudaFree(devNewCentSum);
-  cudaFree(devNewCentCount);
-  cudaFree(devConFlag);
 
   endTime = omp_get_wtime();
   return endTime - startTime;
@@ -4536,7 +4358,8 @@ double startLloydOnGPU(PointInfo *pointInfo,
                                                devCentData[gpuIter],
                                                numPnts[gpuIter],
                                                numCent,
-                                               numDim);
+                                               numDim,
+                                               devDistCalcCountArr[gpuIter]);
 
     }
 
@@ -4631,18 +4454,10 @@ double startLloydOnGPU(PointInfo *pointInfo,
     #pragma omp parallel for num_threads(numGPU)
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
-      cudaSetDevice(gpuIter);
-      cudaDeviceSynchronize();
-    }
-
-    #pragma omp parallel for num_threads(numGPU)
-    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-    {
       gpuErrchk(cudaSetDevice(gpuIter));
       checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo[gpuIter],
                                            devConFlagArr[gpuIter],
                                            numPnts[gpuIter]);
-
     }
 
     index++;

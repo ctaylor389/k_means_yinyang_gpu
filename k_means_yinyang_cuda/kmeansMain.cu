@@ -279,7 +279,7 @@ int main(int argc, char *argv[])
         warmupGPU(numGPU);
         runtime =
           startLloydOnGPU(pointInfo, centInfo, pointData, centData,
-                          numPnt, numCent, numDim, maxIter, &ranIter, &calcCount);
+                          numPnt, numCent, numDim, maxIter, numGPU, &ranIter, &calcCount);
         break;
       case FULLCPU:
         runtime =

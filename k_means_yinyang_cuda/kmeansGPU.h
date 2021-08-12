@@ -126,6 +126,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
                      const int numCent,
                      const int numDim,
                      const int maxIter,
+                     const int numGPU,
                      unsigned int *ranIter,
                      unsigned long long int *countPtr);
 

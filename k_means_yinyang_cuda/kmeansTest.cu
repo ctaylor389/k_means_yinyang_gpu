@@ -95,7 +95,7 @@ TestError chooseAndRunImp(ImpType imp,
       case LLOYDGPU:
         warmupGPU(numGPU);
         *runtime = startLloydOnGPU(*pointInfo, *centInfo, *pointData, *centData,
-                        numPnt, numCent, numDim, maxIter, ranIter);
+                        numPnt, numCent, numDim, maxIter, numGPU, ranIter);
         break;
       case FULLCPU:
         *runtime = startFullOnCPU(*pointInfo, *centInfo, *pointData, *centData, numPnt, 
@@ -140,7 +140,7 @@ TestError chooseAndRunImp(ImpType imp,
       case LLOYDGPU:
         warmupGPU(numGPU);
         *runtime = startLloydOnGPU(*pointInfo, *centInfo, *pointData, *centData,
-                        numPnt, numCent, numDim, maxIter, ranIter, countPtr);
+                        numPnt, numCent, numDim, maxIter, numGPU, ranIter, countPtr);
         break;
       case FULLCPU:
         *runtime = startFullOnCPU(*pointInfo, *centInfo, *pointData, *centData, 
@@ -216,7 +216,7 @@ TestError timeImp(ImpType timedImp,
     case LLOYDGPU:
       warmupGPU(numGPU);
       *runtime = startLloydOnGPU(pointInfo,centInfo,pointData,centData,numPnt,
-                                 numCent,numDim,maxIter,ranIter);
+                                 numCent,numDim,maxIter,numGPU,ranIter);
       break;
     case FULLCPU:
       *runtime = startFullOnCPU(pointInfo,centInfo,pointData,centData,numPnt,
@@ -398,7 +398,7 @@ TestError testImpWithKeyFile(ImpType testImp,
     case LLOYDGPU:
       warmupGPU(numGPU);
       startLloydOnGPU(pointInfo, centInfo, pointData, centData,
-                      numPnt, numCent, numDim, maxIter, &ranIter);
+                      numPnt, numCent, numDim, maxIter, numGPU, &ranIter);
       break;
     case FULLCPU:
       startFullOnCPU(pointInfo, centInfo, pointData, centData,

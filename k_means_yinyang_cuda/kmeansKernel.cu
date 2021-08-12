@@ -103,6 +103,41 @@ __global__ void initRunKernel(PointInfo *pointInfo,
   }
 }
 
+
+
+
+__global__ void initRunKernelLloyd(PointInfo *pointInfo,
+                            CentInfo *centInfo,
+                            DTYPE *pointData,
+                            DTYPE *centData,
+                            const int numPnt,
+                            const int numCent,
+                            const int numDim)
+{
+  unsigned int tid=threadIdx.x+(blockIdx.x*BLOCKSIZE);
+  if(tid >= numPnt)
+  return;
+
+  unsigned int centIndex;
+
+  DTYPE currDistance;
+  pointInfo[tid].uprBound = INFINITY;
+
+  for(centIndex = 0; centIndex < numCent; centIndex++)
+  {
+    // calculate euclidean distance between point and centroid
+    currDistance = calcDis(&pointData[tid * numDim],
+                           &centData[centIndex * numDim],
+                           numDim);
+    if(currDistance < pointInfo[tid].uprBound)
+    {
+      // update assignment and upper bound
+      pointInfo[tid].centroidIndex = centIndex;
+      pointInfo[tid].uprBound = currDistance;
+    }
+  }
+}
+
 // Lloyds point assignment step
 __global__ void assignPointsLloyd(PointInfo *pointInfo,
                                 CentInfo *centInfo,
@@ -554,7 +589,6 @@ __global__ void calcNewCentroids(PointInfo *pointInfo,
   DTYPE oldFeature, oldSumFeat, newSumFeat, compDrift;
 
   unsigned int dimIndex;
-  //vector oldVec;
 
   // create the new centroid vector
   for(dimIndex = 0; dimIndex < numDim; dimIndex++)
@@ -637,7 +671,6 @@ __global__ void calcNewCentroidsLloyd(PointInfo *pointInfo,
 
   unsigned int dimIndex;
 
-
   for(dimIndex = 0; dimIndex < numDim; dimIndex++)
   {
     if(newCounts[tid] > 0)
@@ -648,6 +681,9 @@ __global__ void calcNewCentroidsLloyd(PointInfo *pointInfo,
     // otherwise, no change
     newSums[(tid * numDim) + dimIndex] = 0.0;
   }
+  
+  centInfo[tid].count = newCounts[tid];
+
   newCounts[tid] = 0;
 }
 
@@ -1095,6 +1131,41 @@ __global__ void assignPointsSuper(PointInfo *pointInfo,
           pointLwrs[tid * numGrp] = compDistance;
         }
       }
+    }
+  }
+}
+
+__global__ void assignPointsLloyd(PointInfo *pointInfo,
+                                CentInfo *centInfo,
+                                DTYPE *pointData,
+                                DTYPE *centData,
+                                const int numPnt,
+                                const int numCent,
+                                const int numDim,
+                                unsigned long long int *calcCount)
+{
+  unsigned int tid=threadIdx.x+(blockIdx.x*BLOCKSIZE);
+  if(tid >= numPnt)
+  return;
+
+  DTYPE currMin = INFINITY;
+  DTYPE currDis;
+
+  unsigned int index;
+
+  // reassign point's former centroid before finding new centroid
+  pointInfo[tid].oldCentroid = pointInfo[tid].centroidIndex;
+
+  for(index = 0; index < numCent; index++)
+  {
+    currDis = calcDis(&pointData[tid * numDim],
+                      &centData[index * numDim],
+                      numDim);
+    if(currDis < currMin)
+    {
+      pointInfo[tid].centroidIndex = index;
+      currMin = currDis;
+      //atomicAdd(calcCount, 1);
     }
   }
 }
