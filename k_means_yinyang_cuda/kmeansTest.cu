@@ -16,6 +16,32 @@ int runValidationTests(ImpType impCode)
     printf("\n");
     
     printf("Starting Test %d with data at ", testCounter);
+    testResult = testImpWithKeyImp(SIMPLEGPU, impCode, 1000000, 200, 20, 
+                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
+    printErrorMessage(testResult, testCounter);
+    testCounter++;
+    printf("\n");
+    
+    if(testResult != testSuccess)
+    failFlag = 1;
+  }
+  
+  return failFlag;
+  
+}
+
+int runMultiGPUTests()
+{
+  int failFlag = 0;
+  int testCounter = 0;
+  
+  TestError testResult;
+  
+  for(int i = 1; i < 5; i++)
+  {
+    printf("\n");
+    
+    printf("Starting Test %d with data at ", testCounter);
     testResult = testImpWithKeyImp(SIMPLEGPU, SIMPLEGPU, 1000000, 200, 20, 
                                    32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
     printErrorMessage(testResult, testCounter);
@@ -73,6 +99,7 @@ int runValidationTests(ImpType impCode)
   return failFlag;
   
 }
+
 
 
 // handles all build up and teardown of an implementation
