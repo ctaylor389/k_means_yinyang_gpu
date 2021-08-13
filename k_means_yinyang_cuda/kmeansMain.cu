@@ -15,11 +15,11 @@ int main(int argc, char *argv[])
   //
   // Optional Flags:
   // -t  <number_of_groups>      (Must be <= number of clusters. Default = 20 for GPU, k/10 for CPU)
-  // -c                          (count distance calculations)
+  // -c  <0_or_1>                (count distance calculations. Default is 0, which does not count distance calculations)
   // -m  <number_of_CPU_threads> (Default is 1)
   // -i  <max_iterations_to_run> (Default is 1000)
   // -g  <number_of_GPUs>        (Default is 1)
-  // -wc <write_to_filepath>     (write final clusters to filepath) 
+  // -wc <write_to_filepath>     (write final clusters to filepath)
   // -wa <write_to_filepath>     (write final point assignments to filepath)
   // -wt <write_to_filepath>     (write timing data to filepath)
   // -v                          (run validation tests)
@@ -43,6 +43,7 @@ int main(int argc, char *argv[])
              "\n"
              "// Optional Flags:\n"
              "// -t  <number_of_groups>      (Must be <= number of clusters. Default = 20 for GPU, k/10 for CPU)\n"
+             "// -c  <0_or_1>                (count distance calculations. Default is 0, which does not count distance calculations)\n"
              "// -m  <number_of_CPU_threads> (Default is 1)\n"
              "// -i  <max_iterations_to_run> (Default is 1000)\n"
              "// -g  <number_of_GPUs>        (Default is 1)\n"
@@ -80,7 +81,7 @@ int main(int argc, char *argv[])
       return 0;
     }
   }
-  
+
   int numPnt;
   int numCent;
   int numGrp = 20;
@@ -95,7 +96,9 @@ int main(int argc, char *argv[])
   char *writeCentPath;
   char *writeAssignPath;
   char *writeTimePath;
-  
+  int countFlag = 0;
+  unsigned long long int calcCount = 0;
+
 
   //Read in parameters from file:
   //dataset filename and cluster instance file
@@ -110,44 +113,45 @@ int main(int argc, char *argv[])
   ImpType impCode = parseImpString(argv[1]);
   if(impCode == INVALIDIMP)
   {
-    printf("Error: Invalid implementation given. Use -h flag for valid implementation types. Exiting...\n"); 
+    printf("Error: Invalid implementation given. Use -h flag for valid implementation types. Exiting...\n");
     return 1;
   }
-  
-  
-  
+
+  char impStr[50];
+  strcpy(impStr, argv[1]);
+
   char datasetPath[200];
   strcpy(datasetPath, argv[2]);
 
   // get data info
   numPnt = atoi(argv[3]);
   if(numPnt <= 0){
-    printf("Error: Cannot recognize given number of points. Exiting...\n"); 
+    printf("Error: Cannot recognize given number of points. Exiting...\n");
     return 1;
   }
-  
+
   numDim = atoi(argv[4]);
   if(numDim <= 0){
-    printf("Error: Cannot recognize given number of dimensions. Exiting...\n"); 
+    printf("Error: Cannot recognize given number of dimensions. Exiting...\n");
     return 1;
   }
-  
+
   numCent = atoi(argv[5]);
   if(numCent <= 0){
-    printf("Error: Cannot recognize given number of clusters. Exiting...\n"); 
+    printf("Error: Cannot recognize given number of clusters. Exiting...\n");
     return 1;
   }
   if(numGrp > numCent)
   numGrp = numCent;
-  
+
   if(impCode == FULLCPU || impCode == SIMPLECPU || impCode == SUPERCPU || impCode == LLOYDCPU){
     if(numCent < 10)
     numGrp = numCent;
     else
     numGrp = numCent / 10;
   }
-  
-  
+
+
   // get optional arguments
   for(int i = 0; i < argc; i++)
   {
@@ -185,7 +189,16 @@ int main(int argc, char *argv[])
       numGPU = atoi(argv[i+1]);
       if(numGPU <= 0 || numGPU > availGPU)
       {
-        printf("Error: Invalid number of requested GPU's. Exiting...\n"); 
+        printf("Error: Invalid number of requested GPU's. Exiting...\n");
+        return 1;
+      }
+    }
+    else if(!strcmp(argv[i],"-c") && i+1 < argc)
+    {
+      countFlag = atoi(argv[i+1]);
+      if(countFlag != 0 && countFlag != 1)
+      {
+        printf("Error: Invalid count flag. Exiting...\n");
         return 1;
       }
     }
@@ -205,14 +218,14 @@ int main(int argc, char *argv[])
       writeTimePath = argv[i+1];
     }
   }
-  
+
   unsigned int ranIter;
 
-
+  
   //import and create dataset
   PointInfo *pointInfo = (PointInfo *)malloc(sizeof(PointInfo) * numPnt);
   DTYPE *pointData = (DTYPE *)malloc(sizeof(DTYPE) * numPnt * numDim);
-  
+
 
   if(importPoints(datasetPath, pointInfo, pointData, numPnt, numDim))
   {
@@ -239,67 +252,129 @@ int main(int argc, char *argv[])
     return 1;
   }
 
-  switch(impCode)
+  if (countFlag)
   {
-    case FULLGPU:
-      warmupGPU();
-      runtime = 
-        startFullOnGPU(pointInfo, centInfo, pointData, centData,
-                       numPnt, numCent, numGrp, numDim, maxIter, &ranIter);
-      break;
-    case SIMPLEGPU:
-      warmupGPU();
-      runtime = 
-        startSimpleOnGPU(pointInfo, centInfo, pointData, centData,
-                         numPnt, numCent, numGrp, numDim, maxIter, &ranIter);
-      break;
-    case SUPERGPU:
-      warmupGPU();
-      runtime = 
-        startSuperOnGPU(pointInfo, centInfo, pointData, centData,
-                        numPnt, numCent, numDim, maxIter, &ranIter);
-      break;
-    case LLOYDGPU:
-      warmupGPU();
-      runtime = 
-        startLloydOnGPU(pointInfo, centInfo, pointData, centData,
-                        numPnt, numCent, numDim, maxIter, &ranIter);
-      break;
-    case FULLCPU:
-      runtime = 
-        startFullOnCPU(pointInfo, centInfo, pointData, centData, numPnt, 
-                       numCent, numGrp, numDim, numThread, maxIter, &ranIter);
-      break;
-    case SIMPLECPU:
-      runtime = 
-        startSimpleOnCPU(pointInfo, centInfo, pointData, centData, numPnt, 
-                         numCent, numGrp, numDim, numThread, maxIter, &ranIter);
-      break;
-    case SUPERCPU:
-      runtime = 
-        startSuperOnCPU(pointInfo, centInfo, pointData, centData,
-                        numPnt, numCent, numDim, numThread, maxIter, &ranIter);
-      break;
-    case LLOYDCPU:
-      runtime = 
-        startLloydOnCPU(pointInfo, centInfo, pointData, centData,
-                        numPnt, numCent, numDim, numThread, maxIter, &ranIter);
-      break;
-    default: 
-      free(pointInfo);
-      free(pointData);
-      free(centInfo);
-      free(centData);
-      return unknownImpError;
+    switch(impCode)
+    {
+      case FULLGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startFullOnGPU(pointInfo, centInfo, pointData, centData,
+                        numPnt, numCent, numGrp, numDim, maxIter, numGPU, &ranIter, &calcCount);
+        break;
+      case SIMPLEGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startSimpleOnGPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numGrp, numDim, maxIter, numGPU,
+                          &ranIter, &calcCount);
+        break;
+      case SUPERGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startSuperOnGPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, maxIter, numGPU, &ranIter, &calcCount);
+        break;
+      case LLOYDGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startLloydOnGPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, maxIter, numGPU, &ranIter, &calcCount);
+        break;
+      case FULLCPU:
+        runtime =
+          startFullOnCPU(pointInfo, centInfo, pointData, centData, numPnt,
+                        numCent, numGrp, numDim, numThread, maxIter, &ranIter);
+        break;
+      case SIMPLECPU:
+        runtime =
+          startSimpleOnCPU(pointInfo, centInfo, pointData, centData, numPnt,
+                          numCent, numGrp, numDim, numThread, maxIter, &ranIter);
+        break;
+      case SUPERCPU:
+        runtime =
+          startSuperOnCPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, numThread, maxIter, &ranIter);
+        break;
+      case LLOYDCPU:
+        runtime =
+          startLloydOnCPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, numThread, maxIter, &ranIter);
+        break;
+      default:
+        free(pointInfo);
+        free(pointData);
+        free(centInfo);
+        free(centData);
+        return unknownImpError;
+    }
   }
-  
+
+  else
+  {
+    switch(impCode)
+    {
+      case FULLGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startFullOnGPU(pointInfo, centInfo, pointData, centData,
+                        numPnt, numCent, numGrp, numDim, maxIter, numGPU, &ranIter);
+        break;
+      case SIMPLEGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startSimpleOnGPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numGrp, numDim, maxIter, numGPU,
+                          &ranIter);
+        break;
+      case SUPERGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startSuperOnGPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, maxIter, numGPU, &ranIter);
+        break;
+      case LLOYDGPU:
+        warmupGPU(numGPU);
+        runtime =
+          startLloydOnGPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, maxIter, numGPU, &ranIter);
+        break;
+      case FULLCPU:
+        runtime =
+          startFullOnCPU(pointInfo, centInfo, pointData, centData, numPnt,
+                        numCent, numGrp, numDim, numThread, maxIter, &ranIter);
+        break;
+      case SIMPLECPU:
+        runtime =
+          startSimpleOnCPU(pointInfo, centInfo, pointData, centData, numPnt,
+                          numCent, numGrp, numDim, numThread, maxIter, &ranIter);
+        break;
+      case SUPERCPU:
+        runtime =
+          startSuperOnCPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, numThread, maxIter, &ranIter);
+        break;
+      case LLOYDCPU:
+        runtime =
+          startLloydOnCPU(pointInfo, centInfo, pointData, centData,
+                          numPnt, numCent, numDim, numThread, maxIter, &ranIter);
+        break;
+      default:
+        free(pointInfo);
+        free(pointData);
+        free(centInfo);
+        free(centData);
+        return unknownImpError;
+    }
+  }
+
   if(writeCentFlag)
   writeData(centData, numCent, numDim, writeCentPath);
   if(writeAssignFlag)
   writeResults(pointInfo, numPnt, writeAssignPath);
   if(writeTimeFlag)
-  writeTimeData(writeTimePath, &runtime, 1, ranIter, 
-                numPnt, numCent, numGrp, numDim, numThread);
+  writeTimeData(writeTimePath, impStr, &runtime, 1, ranIter,
+                numPnt, numCent, numGrp, numDim, numThread, numGPU, calcCount);
 
   free(pointData);
   free(centData);
@@ -308,3 +383,5 @@ int main(int argc, char *argv[])
 
   return 0;
 }
+
+

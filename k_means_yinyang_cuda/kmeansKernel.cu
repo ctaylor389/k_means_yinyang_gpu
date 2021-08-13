@@ -5,10 +5,10 @@
 ///////////////////////////////
 
 /*
-device helper function provides a double precision implementation 
-of atomicMax using atomicCAS 
+device helper function provides a double precision implementation
+of atomicMax using atomicCAS
 */
-__device__ void atomicMax(double *const address, 
+__device__ void atomicMax(double *const address,
                         const double value)
 {
   if (*address >= value)
@@ -28,8 +28,8 @@ __device__ void atomicMax(double *const address,
 }
 
 /*
-device helper function provides a single precision implementation 
-of atomicMax using atomicCAS 
+device helper function provides a single precision implementation
+of atomicMax using atomicCAS
 */
 __device__ void atomicMax(float *const address,
                         const float value)
@@ -81,15 +81,15 @@ __global__ void initRunKernel(PointInfo *pointInfo,
   for(centIndex = 0; centIndex < numCent; centIndex++)
   {
     // calculate euclidean distance between point and centroid
-    currDistance = calcDis(&pointData[tid * numDim], 
+    currDistance = calcDis(&pointData[tid * numDim],
                            &centData[centIndex * numDim],
                            numDim);
     if(currDistance < pointInfo[tid].uprBound)
     {
-      // make the former current min the new 
+      // make the former current min the new
       // lower bound for it's group
       if(pointInfo[tid].uprBound != INFINITY)
-      pointLwrs[(tid * numGrp) + centInfo[pointInfo[tid].centroidIndex].groupNum] = 
+      pointLwrs[(tid * numGrp) + centInfo[pointInfo[tid].centroidIndex].groupNum] =
                                                                   pointInfo[tid].uprBound;
 
       // update assignment and upper bound
@@ -99,6 +99,41 @@ __global__ void initRunKernel(PointInfo *pointInfo,
     else if(currDistance < pointLwrs[(tid * numGrp) + centInfo[centIndex].groupNum])
     {
       pointLwrs[(tid * numGrp) + centInfo[centIndex].groupNum] = currDistance;
+    }
+  }
+}
+
+
+
+
+__global__ void initRunKernelLloyd(PointInfo *pointInfo,
+                            CentInfo *centInfo,
+                            DTYPE *pointData,
+                            DTYPE *centData,
+                            const int numPnt,
+                            const int numCent,
+                            const int numDim)
+{
+  unsigned int tid=threadIdx.x+(blockIdx.x*BLOCKSIZE);
+  if(tid >= numPnt)
+  return;
+
+  unsigned int centIndex;
+
+  DTYPE currDistance;
+  pointInfo[tid].uprBound = INFINITY;
+
+  for(centIndex = 0; centIndex < numCent; centIndex++)
+  {
+    // calculate euclidean distance between point and centroid
+    currDistance = calcDis(&pointData[tid * numDim],
+                           &centData[centIndex * numDim],
+                           numDim);
+    if(currDistance < pointInfo[tid].uprBound)
+    {
+      // update assignment and upper bound
+      pointInfo[tid].centroidIndex = centIndex;
+      pointInfo[tid].uprBound = currDistance;
     }
   }
 }
@@ -384,7 +419,7 @@ __device__ void pointCalcsFull(PointInfo *pointInfoPtr,
   DTYPE oldCentUpr = pointInfoPtr->uprBound;
   DTYPE oldCentLwr = pointLwrPtr[centInfo[pointInfoPtr->oldCentroid].groupNum];
 
-  // loop through all the groups 
+  // loop through all the groups
   for(grpIndex = 0; grpIndex < numGrp; grpIndex++)
   {
     // if the group is marked as going through the group filter
@@ -399,21 +434,21 @@ __device__ void pointCalcsFull(PointInfo *pointInfoPtr,
       // reset the group's lower bound in order to find the new lower bound
       pointLwrPtr[grpIndex] = INFINITY;
 
-      if(grpIndex == centInfo[pointInfoPtr->oldCentroid].groupNum && 
+      if(grpIndex == centInfo[pointInfoPtr->oldCentroid].groupNum &&
         pointInfoPtr->oldCentroid != pointInfoPtr->centroidIndex)
       pointLwrPtr[centInfo[pointInfoPtr->oldCentroid].groupNum] = oldCentUpr;
 
       // loop through all the group's centroids
       for(centIndex = 0; centIndex < numCent; centIndex++)
       {
-        // if the cluster is the cluster already assigned 
+        // if the cluster is the cluster already assigned
         // at the start of this iteration
         if(centIndex == pointInfoPtr->oldCentroid)
         continue;
 
         // if the cluster is a part of the group being checked now
         if(grpIndex == centInfo[centIndex].groupNum)
-        {   
+        {
           // local filtering condition
           if(pointLwrPtr[grpIndex] < oldLwr - centInfo[centIndex].drift)
           continue;
@@ -468,13 +503,13 @@ __device__ void pointCalcsSimple(PointInfo *pointInfoPtr,
       if(index == pointInfoPtr->oldCentroid)
       continue;
 
-      compDistance = calcDis(pointDataPtr, 
+      compDistance = calcDis(pointDataPtr,
                              &centData[index * numDim],
                              numDim);
 
       if(compDistance < pointInfoPtr->uprBound)
       {
-        pointLwrPtr[centInfo[pointInfoPtr->centroidIndex].groupNum] = 
+        pointLwrPtr[centInfo[pointInfoPtr->centroidIndex].groupNum] =
           pointInfoPtr->uprBound;
         pointInfoPtr->centroidIndex = index;
         pointInfoPtr->uprBound = compDistance;
@@ -526,17 +561,18 @@ __global__ void calcCentData(PointInfo *pointInfo,
       {
         atomicAdd(&oldSums[(pointInfo[tid].oldCentroid * numDim) + dimIndex],
                   pointData[(tid * numDim) + dimIndex]);
-      }	
+      }
       atomicAdd(&newSums[(pointInfo[tid].centroidIndex * numDim) + dimIndex],
                 pointData[(tid * numDim) + dimIndex]);
     }
   }
-  
+
 }
 
 __global__ void calcNewCentroids(PointInfo *pointInfo,
                                CentInfo *centInfo,
                                DTYPE *centData,
+                               DTYPE *oldCentData,
                                DTYPE *oldSums,
                                DTYPE *newSums,
                                DTYPE *maxDriftArr,
@@ -549,41 +585,37 @@ __global__ void calcNewCentroids(PointInfo *pointInfo,
 
   if(tid >= numCent)
   return;
-  unsigned int btid = threadIdx.x;
 
   DTYPE oldFeature, oldSumFeat, newSumFeat, compDrift;
-  
+
   unsigned int dimIndex;
-  //vector oldVec;
-  
-  extern __shared__ DTYPE oldCentPos[];
 
   // create the new centroid vector
   for(dimIndex = 0; dimIndex < numDim; dimIndex++)
   {
     if(newCounts[tid] > 0)
     {
-      oldCentPos[(btid * numDim) + dimIndex] = centData[(tid * numDim) + dimIndex];
-      
+      oldCentData[(tid * numDim) + dimIndex] = centData[(tid * numDim) + dimIndex];
+
       oldFeature = centData[(tid * numDim) + dimIndex];
       oldSumFeat = oldSums[(tid * numDim) + dimIndex];
       newSumFeat = newSums[(tid * numDim) + dimIndex];
 
-      centData[(tid * numDim) + dimIndex] = 
+      centData[(tid * numDim) + dimIndex] =
         (oldFeature * oldCounts[tid] - oldSumFeat + newSumFeat)/newCounts[tid];
     }
     else
     {
       // no change to centroid
-      oldCentPos[(btid * numDim) + dimIndex] = centData[(tid * numDim) + dimIndex];
+      oldCentData[(tid * numDim) + dimIndex] = centData[(tid * numDim) + dimIndex];
     }
     newSums[(tid * numDim) + dimIndex] = 0.0;
     oldSums[(tid * numDim) + dimIndex] = 0.0;
   }
-  
+
 
   // calculate the centroid's drift
-  compDrift = calcDis(&oldCentPos[btid * numDim],
+  compDrift = calcDis(&oldCentData[tid * numDim],
                       &centData[tid * numDim],
                       numDim);
 
@@ -591,11 +623,12 @@ __global__ void calcNewCentroids(PointInfo *pointInfo,
 
   // set the centroid's vector to the new vector
   centInfo[tid].drift = compDrift;
+  centInfo[tid].count = newCounts[tid];
 
   // clear the count and the sum arrays
   oldCounts[tid] = 0;
   newCounts[tid] = 0;
-  
+
 }
 
 
@@ -637,7 +670,6 @@ __global__ void calcNewCentroidsLloyd(PointInfo *pointInfo,
   return;
 
   unsigned int dimIndex;
-  
 
   for(dimIndex = 0; dimIndex < numDim; dimIndex++)
   {
@@ -649,12 +681,15 @@ __global__ void calcNewCentroidsLloyd(PointInfo *pointInfo,
     // otherwise, no change
     newSums[(tid * numDim) + dimIndex] = 0.0;
   }
+  
+  centInfo[tid].count = newCounts[tid];
+
   newCounts[tid] = 0;
 }
 
 /*
 this kernel is used to test performance differences between
-the yinyang centroid update and the standard centroid update 
+the yinyang centroid update and the standard centroid update
 */
 __global__ void calcNewCentroidsAve(PointInfo *pointInfo,
                                     CentInfo *centInfo,
@@ -682,7 +717,7 @@ __global__ void calcNewCentroidsAve(PointInfo *pointInfo,
     if(newCounts[tid] > 0)
     {
       oldCentPos[(btid * numDim) + dimIndex] = centData[(tid * numDim) + dimIndex];
-  
+
       centData[(tid * numDim) + dimIndex] =
         newSums[(tid * numDim) + dimIndex] / newCounts[tid];
 
@@ -697,7 +732,7 @@ __global__ void calcNewCentroidsAve(PointInfo *pointInfo,
   }
 
   // compute drift
-  compDrift = calcDis(&oldCentPos[btid * numDim], 
+  compDrift = calcDis(&oldCentPos[btid * numDim],
                       &centData[tid * numDim], numDim);
   centInfo[tid].drift = compDrift;
 
@@ -732,7 +767,7 @@ __global__ void checkConverge(PointInfo *pointInfo,
 
   if(pointInfo[tid].oldCentroid != pointInfo[tid].centroidIndex)
   atomicCAS(conFlag, 0, 1);
-  
+
 }
 
 /*
@@ -745,7 +780,7 @@ __global__ void clearDriftArr(DTYPE *maxDriftArr,
   unsigned int tid=threadIdx.x+(blockIdx.x*BLOCKSIZE);
   if(tid >= numGrp)
   return;
-  
+
   maxDriftArr[tid] = 0.0;
 }
 
@@ -782,7 +817,7 @@ __global__ void clearCentCalcDataLloyd(DTYPE *newCentSum,
   return;
 
   unsigned int dimIndex;
-  
+
   for(dimIndex = 0; dimIndex < numDim; dimIndex++)
   {
     newCentSum[(tid * numDim) + dimIndex] = 0.0;
@@ -819,6 +854,11 @@ __device__ DTYPE calcDis(DTYPE *vec1, DTYPE *vec2, const int numDim)
 // Overloaded kernels and functions for counting distance calculations //
 /////////////////////////////////////////////////////////////////////////
 
+/*
+Global kernel that assigns one thread to one point
+Given points are each assigned a centroid and upper
+and lower bounds
+*/
 __global__ void initRunKernel(PointInfo *pointInfo,
                             CentInfo *centInfo,
                             DTYPE *pointData,
@@ -842,26 +882,23 @@ __global__ void initRunKernel(PointInfo *pointInfo,
   for(centIndex = 0; centIndex < numCent; centIndex++)
   {
     // calculate euclidean distance between point and centroid
-    currDistance = calcDis(&pointData[tid * numDim], 
+    currDistance = calcDis(&pointData[tid * numDim],
                            &centData[centIndex * numDim],
                            numDim);
     atomicAdd(calcCount, 1);
     if(currDistance < pointInfo[tid].uprBound)
     {
-      // make the former current min the new 
+      // make the former current min the new
       // lower bound for it's group
       if(pointInfo[tid].uprBound != INFINITY)
-      {
-        pointLwrs[(tid * numDim) + 
-          centInfo[pointInfo[tid].centroidIndex].groupNum] = 
-          pointInfo[tid].uprBound;
-      }
+      pointLwrs[(tid * numGrp) + centInfo[pointInfo[tid].centroidIndex].groupNum] =
+                                                                  pointInfo[tid].uprBound;
+
       // update assignment and upper bound
       pointInfo[tid].centroidIndex = centIndex;
       pointInfo[tid].uprBound = currDistance;
     }
-    else if(currDistance < pointLwrs[(tid * numGrp) + 
-      centInfo[centIndex].groupNum])
+    else if(currDistance < pointLwrs[(tid * numGrp) + centInfo[centIndex].groupNum])
     {
       pointLwrs[(tid * numGrp) + centInfo[centIndex].groupNum] = currDistance;
     }
@@ -874,16 +911,16 @@ Full Yinyang algorithm point assignment step
 Includes global, group, and local filters
 */
 __global__ void assignPointsFull(PointInfo *pointInfo,
-                                 CentInfo *centInfo,
-                                 DTYPE *pointData,
-                                 DTYPE *pointLwrs,
-                                 DTYPE *centData,
-                                 DTYPE *maxDriftArr,
-                                 const int numPnt,
-                                 const int numCent,
-                                 const int numGrp,
-                                 const int numDim,
-                                 unsigned long long int *calcCount)
+                               CentInfo *centInfo,
+                               DTYPE *pointData,
+                               DTYPE *pointLwrs,
+                               DTYPE *centData,
+                               DTYPE *maxDriftArr,
+                               const int numPnt,
+                               const int numCent,
+                               const int numGrp,
+                               const int numDim,
+                               unsigned long long int *calcCount)
 {
   unsigned int tid=threadIdx.x+(blockIdx.x*BLOCKSIZE);
   if(tid >= numPnt)
@@ -925,7 +962,6 @@ __global__ void assignPointsFull(PointInfo *pointInfo,
       calcDis(&pointData[tid * numDim],
               &centData[pointInfo[tid].centroidIndex * numDim], numDim);
     atomicAdd(calcCount, 1);
-
     // if the lower bound is less than the upper bound
     if(tmpGlobLwr < pointInfo[tid].uprBound)
     {
@@ -943,8 +979,7 @@ __global__ void assignPointsFull(PointInfo *pointInfo,
       // execute point calcs given the groups
       pointCalcsFull(&pointInfo[tid], centInfo, &pointData[tid * numDim],
                      &pointLwrs[tid * numGrp], centData, maxDriftArr,
-                     &groupLclArr[btid * numGrp], numPnt, 
-                     numCent, numGrp, numDim, calcCount);
+                     &groupLclArr[btid * numGrp], numPnt, numCent, numGrp, numDim, calcCount);
     }
   }
 }
@@ -1001,9 +1036,9 @@ __global__ void assignPointsSimple(PointInfo *pointInfo,
   {
     // tighten upper bound ub = d(x, b(x))
     pointInfo[tid].uprBound =
-      calcDis(&pointData[tid * numDim],
-              &centData[pointInfo[tid].centroidIndex * numDim],
-              numDim);
+        calcDis(&pointData[tid * numDim],
+                &centData[pointInfo[tid].centroidIndex * numDim],
+                numDim);
     atomicAdd(calcCount, 1);
 
     // if the lower bound is less than the upper bound
@@ -1019,12 +1054,13 @@ __global__ void assignPointsSimple(PointInfo *pointInfo,
         else
         groupLclArr[index + (btid * numGrp)] = 0;
       }
-        // execute point calcs given the groups
-      pointCalcsSimple(&pointInfo[tid],centInfo, &pointData[tid * numDim],
-                       &pointLwrs[tid * numGrp], centData, 
-                       maxDriftArr, &groupLclArr[btid * numGrp], 
-                       numPnt, numCent, numGrp, numDim, calcCount);
+
+      // execute point calcs given the groups
+      pointCalcsSimple(&pointInfo[tid],centInfo,&pointData[tid * numDim],
+                       &pointLwrs[tid * numGrp], centData, maxDriftArr,
+                       &groupLclArr[btid * numGrp], numPnt, numCent, numGrp, numDim, calcCount);
     }
+
   }
 }
 
@@ -1033,16 +1069,16 @@ Super Simplified Yinyang algorithm point assignment step
 Includes only the global filter
 */
 __global__ void assignPointsSuper(PointInfo *pointInfo,
-                                  CentInfo *centInfo,
-                                  DTYPE *pointData,
-                                  DTYPE *pointLwrs,
-                                  DTYPE *centData,
-                                  DTYPE *maxDrift,
-                                  const int numPnt,
-                                  const int numCent,
-                                  const int numGrp,
-                                  const int numDim,
-                                  unsigned long long int *calcCount)
+                                CentInfo *centInfo,
+                                DTYPE *pointData,
+                                DTYPE *pointLwrs,
+                                DTYPE *centData,
+                                DTYPE *maxDrift,
+                                const int numPnt,
+                                const int numCent,
+                                const int numGrp,
+                                const int numDim,
+                                unsigned long long int *calcCount)
 {
   unsigned int tid=threadIdx.x+(blockIdx.x*BLOCKSIZE);
   if(tid >= numPnt)
@@ -1064,8 +1100,7 @@ __global__ void assignPointsSuper(PointInfo *pointInfo,
     // tighten upper bound
     pointInfo[tid].uprBound =
       calcDis(&pointData[tid * numDim],
-              &centData[pointInfo[tid].centroidIndex * numDim],
-              numDim);
+              &centData[pointInfo[tid].centroidIndex * numDim],numDim);
     atomicAdd(calcCount, 1);
 
     if(pointLwrs[(tid * numGrp)] < pointInfo[tid].uprBound)
@@ -1082,6 +1117,7 @@ __global__ void assignPointsSuper(PointInfo *pointInfo,
         compDistance = calcDis(&pointData[tid * numDim],
                                &centData[centIndex * numDim],
                                numDim);
+
         atomicAdd(calcCount, 1);
 
         if(compDistance < pointInfo[tid].uprBound)
@@ -1124,7 +1160,7 @@ __device__ void pointCalcsFull(PointInfo *pointInfoPtr,
   DTYPE oldCentUpr = pointInfoPtr->uprBound;
   DTYPE oldCentLwr = pointLwrPtr[centInfo[pointInfoPtr->oldCentroid].groupNum];
 
-  // loop through all the groups 
+  // loop through all the groups
   for(grpIndex = 0; grpIndex < numGrp; grpIndex++)
   {
     // if the group is marked as going through the group filter
@@ -1139,34 +1175,31 @@ __device__ void pointCalcsFull(PointInfo *pointInfoPtr,
       // reset the group's lower bound in order to find the new lower bound
       pointLwrPtr[grpIndex] = INFINITY;
 
-      if(grpIndex == centInfo[pointInfoPtr->oldCentroid].groupNum && 
-         pointInfoPtr->oldCentroid != pointInfoPtr->centroidIndex)
+      if(grpIndex == centInfo[pointInfoPtr->oldCentroid].groupNum &&
+        pointInfoPtr->oldCentroid != pointInfoPtr->centroidIndex)
       pointLwrPtr[centInfo[pointInfoPtr->oldCentroid].groupNum] = oldCentUpr;
 
-      // loop through all the group's clusters
+      // loop through all the group's centroids
       for(centIndex = 0; centIndex < numCent; centIndex++)
       {
-        // if the cluster is the cluster already assigned 
+        // if the cluster is the cluster already assigned
         // at the start of this iteration
         if(centIndex == pointInfoPtr->oldCentroid)
         continue;
 
         // if the cluster is a part of the group being checked now
         if(grpIndex == centInfo[centIndex].groupNum)
-        {   
+        {
           // local filtering condition
           if(pointLwrPtr[grpIndex] < oldLwr - centInfo[centIndex].drift)
           continue;
 
           // perform distance calculation
-          compDistance = calcDis(pointDataPtr, 
-                                 &centData[centIndex * numDim], numDim);
+          compDistance = calcDis(pointDataPtr, &centData[centIndex * numDim], numDim);
           atomicAdd(calcCount, 1);
-
           if(compDistance < pointInfoPtr->uprBound)
           {
-            pointLwrPtr[centInfo[pointInfoPtr->centroidIndex].groupNum] = 
-              pointInfoPtr->uprBound;
+            pointLwrPtr[centInfo[pointInfoPtr->centroidIndex].groupNum] = pointInfoPtr->uprBound;
             pointInfoPtr->centroidIndex = centIndex;
             pointInfoPtr->uprBound = compDistance;
           }
@@ -1212,14 +1245,14 @@ __device__ void pointCalcsSimple(PointInfo *pointInfoPtr,
       if(index == pointInfoPtr->oldCentroid)
       continue;
 
-      compDistance = calcDis(pointDataPtr, 
+      compDistance = calcDis(pointDataPtr,
                              &centData[index * numDim],
                              numDim);
       atomicAdd(calcCount, 1);
 
       if(compDistance < pointInfoPtr->uprBound)
       {
-        pointLwrPtr[centInfo[pointInfoPtr->centroidIndex].groupNum] = 
+        pointLwrPtr[centInfo[pointInfoPtr->centroidIndex].groupNum] =
           pointInfoPtr->uprBound;
         pointInfoPtr->centroidIndex = index;
         pointInfoPtr->uprBound = compDistance;
