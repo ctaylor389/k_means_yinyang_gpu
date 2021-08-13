@@ -4,7 +4,7 @@ Yinyang kmeans algorithm implemented in CUDA
 ## Contents
 - Build From Source
 - Running the Compiled Program
-- params.h
+- Dataset Format
 - Implemented Algorithms
 
 ## Build From Source
