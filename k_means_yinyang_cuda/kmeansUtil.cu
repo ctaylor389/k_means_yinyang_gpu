@@ -34,7 +34,6 @@ int writeTimeData(const char *fname,
 									int numGPU,
 									unsigned long long int calcCount)
 {
-	char writeString[300];
 	FILE *fp;
 	int index;
 	double timeSum = 0.0;
@@ -56,22 +55,19 @@ int writeTimeData(const char *fname,
 
 	if (ftell(fp) == 0) 
 	{
-		sprintf(writeString, "Implementation, Time, Iterations, Points, Centroids, Groups, Dimensions, CPUThreads, GPUs, CountFlag\n");
-		fputs(writeString, fp);
+		fprintf(fp, "Implementation, Time, Iterations, Points, Centroids, Groups, Dimensions, CPUThreads, GPUs, CountFlag\n");
 	}
 
 	if (calcCount)
 	{
-		sprintf(writeString, "%s, %f, %d, %d, %d, %d, %d, %d, %d, %llu\n", 
+		fprintf(fp, "%s, %f, %d, %d, %d, %d, %d, %d, %d, %llu\n", 
           impStr, finalTime, totalIter, numPnt, numCent, numGrp, numDim, numThread, numGPU, calcCount);
-		fputs(writeString, fp);
 	}
 
 	else
 	{
-		sprintf(writeString, "%s, %f, %d, %d, %d, %d, %d, %d, %d, %s\n", 
+		fprintf(fp, "%s, %f, %d, %d, %d, %d, %d, %d, %d, %s\n", 
           impStr, finalTime, totalIter, numPnt, numCent, numGrp, numDim, numThread, numGPU, "N/A");
-		fputs(writeString, fp);
 	}
 	
 	fclose(fp);
@@ -316,7 +312,7 @@ int groupCent(CentInfo *centInfo,
 		}
 	}
 	free(overData);
-    free(overInfo);
+  free(overInfo);
 	return 0;
 }
 
