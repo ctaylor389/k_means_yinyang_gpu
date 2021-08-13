@@ -4189,26 +4189,6 @@ double startLloydOnGPU(PointInfo *pointInfo,
     hostConFlagPtrArr[gpuIter] = &hostConFlagArr[gpuIter];
   }
 
-  unsigned long long int hostDistCalc = 0;
-  unsigned long long int *hostDistCalcCount = &hostDistCalc;
-
-  unsigned long long int *hostDistCalcCountArr;
-  hostDistCalcCountArr=(unsigned long long int *)malloc(sizeof(unsigned long long int)*numGPU);
-  for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-  {
-    hostDistCalcCountArr[gpuIter] = 0;
-  }
-  unsigned long long int *devDistCalcCountArr[numGPU];
-
-
-  for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-  {
-    gpuErrchk(cudaSetDevice(gpuIter));
-    gpuErrchk(cudaMalloc(&devDistCalcCountArr[gpuIter], sizeof(unsigned long long int)));
-    gpuErrchk(cudaMemcpy(devDistCalcCountArr[gpuIter], &hostDistCalcCountArr[gpuIter], 
-                         sizeof(unsigned long long int), cudaMemcpyHostToDevice));
-  }
-
   int index = 1;
 
   unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
@@ -4499,15 +4479,6 @@ double startLloydOnGPU(PointInfo *pointInfo,
   // and the final centroid positions
   gpuErrchk(cudaMemcpy(centData, devCentData[0],
                        sizeof(DTYPE)*numCent*numDim,cudaMemcpyDeviceToHost));
-
-  #pragma omp parallel for num_threads(numGPU)
-  for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-  {
-    gpuErrchk(cudaSetDevice(gpuIter));
-    gpuErrchk(cudaMemcpy(&hostDistCalcCountArr[gpuIter],
-                devDistCalcCountArr[gpuIter], sizeof(unsigned long long int),
-                            cudaMemcpyDeviceToHost));
-  }
 
   *countPtr = numPnt * numCent * index;
 
