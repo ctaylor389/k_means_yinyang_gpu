@@ -16,6 +16,7 @@
 DTYPE calcDisCPU(DTYPE *vec1, DTYPE *vec2, const int numDim);
 
 int writeTimeData(const char *fname, 
+                  const char *impStr,
                   double *timeArr, 
                   int numRuns, 
                   int totalIter, 
@@ -23,7 +24,9 @@ int writeTimeData(const char *fname,
                   int numCent, 
                   int numGrp,
                   int numDim, 
-                  int numThread);
+                  int numThread,
+                  int numGPU,
+                  unsigned long long int calcCount);
 
 
 int importPoints(const char *fname,
@@ -79,5 +82,25 @@ int compareData(DTYPE *data1,
 int compareAssign(PointInfo *info1,
                   PointInfo *info2,
                   const int numPnt);
+
+void calcWeightedMeans(CentInfo *newCentInfo,
+                       CentInfo **allCentInfo,
+                       DTYPE *newCentData,
+                       DTYPE *oldCentData,
+                       DTYPE **allCentData,
+                       DTYPE *newMaxDriftArr,
+                       const int numCent,
+                       const int numGrp,
+                       const int numDim,
+                       const int numGPU);
+
+void calcWeightedMeansLloyd(CentInfo *newCentInfo,
+                       CentInfo **allCentInfo,
+                       DTYPE *newCentData,
+                       DTYPE *oldCentData,
+                       DTYPE **allCentData,
+                       const int numCent,
+                       const int numDim,
+                       const int numGPU);
 
 #endif 
