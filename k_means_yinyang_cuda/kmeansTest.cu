@@ -11,7 +11,7 @@ int runValidationTests(ImpType impCode)
   
   TestError testResult;
   
-  /*for(int i = 1; i < 5; i++)
+  for(int i = 1; i < 5; i++)
   {
     printf("\n");
     
@@ -54,7 +54,7 @@ int runValidationTests(ImpType impCode)
     
     if(testResult != testSuccess)
     failFlag = 1;
-  }*/
+  }
   for(int i = 1; i < 5; i++)
   {
     printf("\n");
