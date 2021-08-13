@@ -25,6 +25,8 @@ typedef enum{
 } TestError;
 
 int runValidationTests(ImpType impCode);
+int runMultiGPUTests();
+
 
 TestError chooseAndRunImp(ImpType imp,
                           PointInfo **pointInfo,
@@ -103,7 +105,6 @@ TestError validateDataImport(const char *inputfname,
                              const char *outputfname, 
                              const int numPnt,
                              const int numDim);
-                             
 
 void printImpName(ImpType imp);
 
