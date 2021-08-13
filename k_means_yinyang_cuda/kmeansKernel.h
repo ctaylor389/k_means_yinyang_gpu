@@ -105,6 +105,7 @@ __global__ void calcCentData(PointInfo *pointInfo,
 __global__ void calcNewCentroids(PointInfo *pointInfo,
                                  CentInfo *centInfo,
                                  DTYPE *centData,
+                                 DTYPE *oldCentData,
                                  DTYPE *oldSums,
                                  DTYPE *newSums,
                                  DTYPE *devMaxDriftArr,
@@ -153,6 +154,14 @@ __global__ void initRunKernel(PointInfo *pointInfo,
                               const int numCent,
                               const int numGrp,
                               const int numDim);
+
+__global__ void initRunKernelLloyd(PointInfo *pointInfo,
+                            CentInfo *centInfo,
+                            DTYPE *pointData,
+                            DTYPE *centData,
+                            const int numPnt,
+                            const int numCent,
+                            const int numDim);
 
 __global__ void clearDriftArr(DTYPE *devMaxDriftArr, const int numGrp);
 
@@ -205,6 +214,15 @@ __global__ void assignPointsSuper(PointInfo *pointInfo,
                                   const int numGrp,
                                   const int numDim,
                                   unsigned long long int *calcCount);
+
+__global__ void assignPointsLloyd(PointInfo *pointInfo,
+                                CentInfo *centInfo,
+                                DTYPE *pointData,
+                                DTYPE *centData,
+                                const int numPnt,
+                                const int numCent,
+                                const int numDim,
+                                unsigned long long int *calcCount);
 
 __device__ void pointCalcsFull(PointInfo *pointInfoPtr,
                                CentInfo *centInfo,

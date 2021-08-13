@@ -25,6 +25,26 @@ typedef enum{
 } TestError;
 
 int runValidationTests(ImpType impCode);
+int runMultiGPUTests();
+
+
+TestError chooseAndRunImp(ImpType imp,
+                          PointInfo **pointInfo,
+                          CentInfo **centInfo,
+                          DTYPE **pointData,
+                          DTYPE **centData,
+                          const int numPnt,
+                          const int numCent,
+                          const int numGrp,
+                          const int numDim,
+                          const int maxIter,
+                          const int numThread,
+                          const int numGPU,
+                          double *runtime,
+                          unsigned int *ranIter,
+                          const char *filepath,
+                          const char *writefile,
+                          unsigned long long int *countPtr);
 
 TestError timeImp(ImpType timedImp, 
                   const int numPnt,
@@ -33,6 +53,7 @@ TestError timeImp(ImpType timedImp,
                   const int numDim,
                   const int maxIter, 
                   const int numThread,
+                  const int numGPU,
                   double *runtime,
                   unsigned int *ranIter, 
                   const char *filepath,
@@ -46,9 +67,11 @@ TestError testImpWithKeyImp(ImpType keyImp,
                             const int numDim,
                             const int maxIter, 
                             const int numThread,
-                            const int numGPU,
+                            const int keyNumGPU,
+                            const int testNumGPU,
                             DTYPE tolerance,
-                            const char *filepath);
+                            const char *filepath,
+                            const int countFlag);
 
 TestError testImpWithKeyFile(ImpType testImp,
                              const int numPnt,
@@ -57,13 +80,14 @@ TestError testImpWithKeyFile(ImpType testImp,
                              const int numDim,
                              const int maxIter, 
                              const int numthread,
+                             const int numGPU,
                              DTYPE tolerance,
                              const char *filepath, 
                              const char *keyFilepath);
 
 
 
-void printErrorMessage(TestError errCode);
+void printErrorMessage(TestError errCode, int testNum);
 
 void printTestParameters(ImpType keyImp,
                          ImpType testImp,
@@ -73,7 +97,8 @@ void printTestParameters(ImpType keyImp,
                          const int numDim,
                          const int maxIter, 
                          const int numThread,
-                         const int numGPU,
+                         const int keyNumGPU,
+                         const int testNumGPU,
                          DTYPE tolerance);
 
 TestError validateDataImport(const char *inputfname,
@@ -81,10 +106,14 @@ TestError validateDataImport(const char *inputfname,
                              const int numPnt,
                              const int numDim);
 
+void printImpName(ImpType imp);
+
 
 #define MSD_PATH "/data/real/YearPredictionMSD.txt"
 #define MSD_SIZE 515345
 #define MSD_DIM 90
+
+
 
 #define SUSY_PATH "/data/real/SUSY_normalize_0_1.txt"
 #define SUSY_SIZE 5000000
@@ -97,5 +126,7 @@ TestError validateDataImport(const char *inputfname,
 #define HIGG_PATH "/data/higgs/higgs_normalize_0_1.txt"
 #define HIGG_SIZE 11000000
 #define HIGG_DIM 28
+
+#define THIRTY_TWO_PATH "/home/ctaylor/data/synthetic/dataset_fixed_len_pts_expo_NDIM_32_pts_1000000.txt"
 
 #endif
