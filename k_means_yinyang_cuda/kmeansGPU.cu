@@ -4515,7 +4515,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
     *hostDistCalcCount += hostDistCalcCountArr[gpuIter];
   }
 
-  *countPtr = *hostDistCalcCount;
+  *countPtr = numPnt * numCent * index;
 
   *ranIter = index;
 
