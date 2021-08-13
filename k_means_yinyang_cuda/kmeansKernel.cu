@@ -1135,41 +1135,6 @@ __global__ void assignPointsSuper(PointInfo *pointInfo,
   }
 }
 
-__global__ void assignPointsLloyd(PointInfo *pointInfo,
-                                CentInfo *centInfo,
-                                DTYPE *pointData,
-                                DTYPE *centData,
-                                const int numPnt,
-                                const int numCent,
-                                const int numDim,
-                                unsigned long long int *calcCount)
-{
-  unsigned int tid=threadIdx.x+(blockIdx.x*BLOCKSIZE);
-  if(tid >= numPnt)
-  return;
-
-  DTYPE currMin = INFINITY;
-  DTYPE currDis;
-
-  unsigned int index;
-
-  // reassign point's former centroid before finding new centroid
-  pointInfo[tid].oldCentroid = pointInfo[tid].centroidIndex;
-
-  for(index = 0; index < numCent; index++)
-  {
-    currDis = calcDis(&pointData[tid * numDim],
-                      &centData[index * numDim],
-                      numDim);
-    if(currDis < currMin)
-    {
-      pointInfo[tid].centroidIndex = index;
-      currMin = currDis;
-      //atomicAdd(calcCount, 1);
-    }
-  }
-}
-
 ////////////////////////////////////////
 // Point Calculation Device Functions //
 ////////////////////////////////////////

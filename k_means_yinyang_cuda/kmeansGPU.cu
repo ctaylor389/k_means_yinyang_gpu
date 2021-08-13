@@ -4358,8 +4358,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
                                                devCentData[gpuIter],
                                                numPnts[gpuIter],
                                                numCent,
-                                               numDim,
-                                               devDistCalcCountArr[gpuIter]);
+                                               numDim);
 
     }
 
@@ -4508,11 +4507,6 @@ double startLloydOnGPU(PointInfo *pointInfo,
     gpuErrchk(cudaMemcpy(&hostDistCalcCountArr[gpuIter],
                 devDistCalcCountArr[gpuIter], sizeof(unsigned long long int),
                             cudaMemcpyDeviceToHost));
-  }
-
-  for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-  {
-    *hostDistCalcCount += hostDistCalcCountArr[gpuIter];
   }
 
   *countPtr = numPnt * numCent * index;
