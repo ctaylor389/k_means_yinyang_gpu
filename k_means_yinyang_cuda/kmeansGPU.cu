@@ -4354,7 +4354,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
   gpuErrchk(cudaMemcpy(centData, devCentData[0],
                        sizeof(DTYPE)*numCent*numDim,cudaMemcpyDeviceToHost));
 
-  *countPtr = numPnt * numCent * index;
+  *countPtr = (uint64_t)numPnt * (uint64_t)numCent * (uint64_t)index;
 
   *ranIter = index;
 

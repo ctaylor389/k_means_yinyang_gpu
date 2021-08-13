@@ -11,13 +11,57 @@ int runValidationTests(ImpType impCode)
   
   TestError testResult;
   
-  for(int i = 0; i < 1; i++)
+  /*for(int i = 1; i < 5; i++)
   {
     printf("\n");
     
     printf("Starting Test %d with data at ", testCounter);
-    testResult = testImpWithKeyImp(SIMPLEGPU, impCode, 1000000, 200, 20, 
-                                   32, 500, 16, 1, 2, 0.0001, THIRTY_TWO_PATH, 1);
+    testResult = testImpWithKeyImp(SIMPLEGPU, SIMPLEGPU, 1000000, 200, 20, 
+                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
+    printErrorMessage(testResult, testCounter);
+    testCounter++;
+    printf("\n");
+    
+    if(testResult != testSuccess)
+    failFlag = 1;
+  }
+  
+  for(int i = 1; i < 5; i++)
+  {
+    printf("\n");
+    
+    printf("Starting Test %d with data at ", testCounter);
+    testResult = testImpWithKeyImp(FULLGPU, FULLGPU, 1000000, 200, 20, 
+                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
+    printErrorMessage(testResult, testCounter);
+    testCounter++;
+    printf("\n");
+    
+    if(testResult != testSuccess)
+    failFlag = 1;
+  }
+  
+  for(int i = 1; i < 5; i++)
+  {
+    printf("\n");
+    
+    printf("Starting Test %d with data at ", testCounter);
+    testResult = testImpWithKeyImp(SUPERGPU, SUPERGPU, 1000000, 200, 20, 
+                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
+    printErrorMessage(testResult, testCounter);
+    testCounter++;
+    printf("\n");
+    
+    if(testResult != testSuccess)
+    failFlag = 1;
+  }*/
+  for(int i = 1; i < 5; i++)
+  {
+    printf("\n");
+    
+    printf("Starting Test %d with data at ", testCounter);
+    testResult = testImpWithKeyImp(LLOYDGPU, LLOYDGPU, 1000000, 200, 20, 
+                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
     printErrorMessage(testResult, testCounter);
     testCounter++;
     printf("\n");
@@ -29,6 +73,7 @@ int runValidationTests(ImpType impCode)
   return failFlag;
   
 }
+
 
 // handles all build up and teardown of an implementation
 // mainly to avoid the switch statements in a hundred different functions
