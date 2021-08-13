@@ -49,7 +49,7 @@ int main(int argc, char *argv[])
              "// -wc <write_to_filepath>     (write final clusters to filepath)\n"
              "// -wa <write_to_filepath>     (write final point assignments to filepath)\n"
              "// -wt <write_to_filepath>     (write timing data to filepath)\n"
-             "// -v                          (run validation tests)"
+             "// -v                          (run validation tests)\n"
              "// -h                          (print help info)\n"
              "//////////////////////////////////////////////////////////////////////////////////////////////////\n\n");
       return 0;
