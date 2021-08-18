@@ -25,8 +25,13 @@ typedef enum{
 } TestError;
 
 int runValidationTests(ImpType impCode);
-int runMultiGPUTests();
 
+int runMultiGPUTests(const int numPnt,
+                     const int numCent,
+                     const int numGrp,
+                     const int numDim,
+                     const int maxIter,
+                     const char *filepath);
 
 TestError chooseAndRunImp(ImpType imp,
                           PointInfo **pointInfo,
