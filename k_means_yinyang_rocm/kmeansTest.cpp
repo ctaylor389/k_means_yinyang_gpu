@@ -6,7 +6,7 @@
 
 int runValidationTests(ImpType impCode)
 {
-  int failFlag = 0;
+  /*int failFlag = 0;
   int testCounter = 0;
   
   TestError testResult;
@@ -24,13 +24,18 @@ int runValidationTests(ImpType impCode)
     
     if(testResult != testSuccess)
     failFlag = 1;
-  }
+  }*/
   
-  return failFlag;
+  return runMultiGPUTests(1864620, 200, 20, 2, 500, "/g/g15/cmtaylor/kmeansYinynag/data/iono_20min_2Mpts_2D.txt");
   
 }
 
-int runMultiGPUTests()
+int runMultiGPUTests(const int numPnt,
+                     const int numCent,
+                     const int numGrp,
+                     const int numDim,
+                     const int maxIter,
+                     const char *filepath)
 {
   int failFlag = 0;
   int testCounter = 0;
@@ -41,9 +46,9 @@ int runMultiGPUTests()
   {
     printf("\n");
     
-    printf("Starting Test %d with data at ", testCounter);
-    testResult = testImpWithKeyImp(SIMPLEGPU, SIMPLEGPU, 1000000, 200, 20, 
-                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
+    printf("Starting Test %d with data at %s", testCounter, filepath);
+    testResult = testImpWithKeyImp(SIMPLEGPU, SIMPLEGPU, numPnt, numCent, numGrp, 
+                                   numDim, maxIter, 16, 1, i, 0.000001, filepath, 1);
     printErrorMessage(testResult, testCounter);
     testCounter++;
     printf("\n");
@@ -56,9 +61,9 @@ int runMultiGPUTests()
   {
     printf("\n");
     
-    printf("Starting Test %d with data at ", testCounter);
-    testResult = testImpWithKeyImp(FULLGPU, FULLGPU, 1000000, 200, 20, 
-                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
+    printf("Starting Test %d with data at %s", testCounter, filepath);
+    testResult = testImpWithKeyImp(FULLGPU, FULLGPU, numPnt, numCent, numGrp, 
+                                   numDim, maxIter, 16, 1, i, 0.000001, filepath, 1);
     printErrorMessage(testResult, testCounter);
     testCounter++;
     printf("\n");
@@ -67,13 +72,13 @@ int runMultiGPUTests()
     failFlag = 1;
   }
   
-  for(int i = 1; i < 5; i++)
+  for(int i = 1; i < 8; i++)
   {
     printf("\n");
     
-    printf("Starting Test %d with data at ", testCounter);
-    testResult = testImpWithKeyImp(SUPERGPU, SUPERGPU, 1000000, 200, 20, 
-                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
+    printf("Starting Test %d with data at %s", testCounter, filepath);
+    testResult = testImpWithKeyImp(SUPERGPU, SUPERGPU, numPnt, numCent, numGrp, 
+                                   numDim, maxIter, 16, 1, i, 0.000001, filepath, 1);
     printErrorMessage(testResult, testCounter);
     testCounter++;
     printf("\n");
@@ -85,9 +90,9 @@ int runMultiGPUTests()
   {
     printf("\n");
     
-    printf("Starting Test %d with data at ", testCounter);
-    testResult = testImpWithKeyImp(LLOYDGPU, LLOYDGPU, 1000000, 200, 20, 
-                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
+    printf("Starting Test %d with data at %s", testCounter, filepath);
+    testResult = testImpWithKeyImp(LLOYDGPU, LLOYDGPU, numPnt, numCent, numGrp, 
+                                   numDim, maxIter, 16, 1, i, 0.000001, filepath, 1);
     printErrorMessage(testResult, testCounter);
     testCounter++;
     printf("\n");
