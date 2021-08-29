@@ -612,16 +612,36 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   int gpuIter;
 
   int numPnts[numGPU];
-  for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-  {
-    if (numPnt % numGPU != 0 && gpuIter == numGPU-1)
-    {
-      numPnts[gpuIter] = (numPnt / numGPU) + (numPnt % numGPU);
-    }
 
-    else
+  int remainder = numPnt % numGPU;
+
+  if (remainder > 1)
+  {
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
-      numPnts[gpuIter] = numPnt / numGPU;
+      if (gpuIter >= numGPU - remainder)
+      {
+        numPnts[gpuIter] = (numPnt / numGPU) + 1;
+      }
+      else
+      {
+        numPnts[gpuIter] = numPnt / numGPU;
+      }
+    }
+  }
+
+  else
+  {
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+      if (remainder != 0 && gpuIter == numGPU-1)
+      {
+        numPnts[gpuIter] = (numPnt / numGPU) + (remainder);
+      }
+      else
+      {
+        numPnts[gpuIter] = numPnt / numGPU;
+      }
     }
   }
 
@@ -838,50 +858,50 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   }
 
   if (numGPU > 1)
+  {
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-        gpuErrchk(cudaSetDevice(gpuIter));
-        gpuErrchk(cudaMemcpy(allCentInfo[gpuIter],
-                            devCentInfo[gpuIter], sizeof(CentInfo)*numCent,
-                            cudaMemcpyDeviceToHost));
-      }
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-        gpuErrchk(cudaSetDevice(gpuIter));
-        gpuErrchk(cudaMemcpy(allCentData[gpuIter],
-                            devCentData[gpuIter], sizeof(DTYPE)*numCent*numDim,
-                            cudaMemcpyDeviceToHost));
-      }
-
-      calcWeightedMeans(newCentInfo, allCentInfo, newCentData, oldCentData,
-        allCentData, newMaxDriftArr, numCent, numGrp, numDim, numGPU);
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-          gpuErrchk(cudaSetDevice(gpuIter));
-
-          // copy input data to GPU
-          gpuErrchk(cudaMemcpy(devCentInfo[gpuIter],
-                      newCentInfo, sizeof(cent)*numCent,
-                                  cudaMemcpyHostToDevice));
-      }
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-          gpuErrchk(cudaSetDevice(gpuIter));
-
-          // copy input data to GPU
-          gpuErrchk(cudaMemcpy(devCentData[gpuIter],
-                      newCentData, sizeof(DTYPE)*numCent*numDim,
-                                  cudaMemcpyHostToDevice));
-      }
+      gpuErrchk(cudaSetDevice(gpuIter));
+      gpuErrchk(cudaMemcpy(allCentInfo[gpuIter],
+                          devCentInfo[gpuIter], sizeof(CentInfo)*numCent,
+                          cudaMemcpyDeviceToHost));
     }
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+      gpuErrchk(cudaSetDevice(gpuIter));
+      gpuErrchk(cudaMemcpy(allCentData[gpuIter],
+                          devCentData[gpuIter], sizeof(DTYPE)*numCent*numDim,
+                          cudaMemcpyDeviceToHost));
+    }
+
+    calcWeightedMeans(newCentInfo, allCentInfo, newCentData, oldCentData,
+      allCentData, newMaxDriftArr, numCent, numGrp, numDim, numGPU);
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+        gpuErrchk(cudaSetDevice(gpuIter));
+
+        // copy input data to GPU
+        gpuErrchk(cudaMemcpy(devCentInfo[gpuIter],
+                    newCentInfo, sizeof(cent)*numCent,
+                                cudaMemcpyHostToDevice));
+    }
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+        gpuErrchk(cudaSetDevice(gpuIter));
+
+        // copy input data to GPU
+        gpuErrchk(cudaMemcpy(devCentData[gpuIter],
+                    newCentData, sizeof(DTYPE)*numCent*numDim,
+                                cudaMemcpyHostToDevice));
+    }
+  }
 
   unsigned int doesNotConverge = 1;
 
@@ -2848,7 +2868,13 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
   int index = 1;
 
-  unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
+  //unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
+  unsigned int NBLOCKS[numGPU];
+  for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+  {
+    NBLOCKS[gpuIter] = ceil(numPnts[gpuIter]*1.0/BLOCKSIZE*1.0);
+  }
+
 
   // group centroids
   groupCent(centInfo, centData, numCent, numGrp, numDim);
@@ -2978,7 +3004,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(cudaSetDevice(gpuIter));
-    clearCentCalcData<<<NBLOCKS, BLOCKSIZE>>>(devNewCentSum[gpuIter],
+    clearCentCalcData<<<NBLOCKS[gpuIter], BLOCKSIZE>>>(devNewCentSum[gpuIter],
                                               devOldCentSum[gpuIter],
                                               devNewCentCount[gpuIter],
                                               devOldCentCount[gpuIter],
@@ -2991,7 +3017,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(cudaSetDevice(gpuIter));
-    clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr[gpuIter], numGrp);
+    clearDriftArr<<<NBLOCKS[gpuIter], BLOCKSIZE>>>(devMaxDriftArr[gpuIter], numGrp);
   }
 
   #pragma omp parallel for num_threads(numGPU)
@@ -2999,7 +3025,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(cudaSetDevice(gpuIter));
     // do single run of naive kmeans for initial centroid assignments
-    initRunKernel<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo[gpuIter],
+    initRunKernel<<<NBLOCKS[gpuIter],BLOCKSIZE>>>(devPointInfo[gpuIter],
                                          devCentInfo[gpuIter],
                                          devPointData[gpuIter],
                                          devPointLwrs[gpuIter],
@@ -3044,50 +3070,50 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   }
 
   if (numGPU > 1)
+  {
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-        gpuErrchk(cudaSetDevice(gpuIter));
-        gpuErrchk(cudaMemcpy(allCentInfo[gpuIter],
-                            devCentInfo[gpuIter], sizeof(CentInfo)*numCent,
-                            cudaMemcpyDeviceToHost));
-      }
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-        gpuErrchk(cudaSetDevice(gpuIter));
-        gpuErrchk(cudaMemcpy(allCentData[gpuIter],
-                            devCentData[gpuIter], sizeof(DTYPE)*numCent*numDim,
-                            cudaMemcpyDeviceToHost));
-      }
-
-      calcWeightedMeans(newCentInfo, allCentInfo, newCentData, oldCentData,
-        allCentData, newMaxDriftArr, numCent, numGrp, numDim, numGPU);
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-          gpuErrchk(cudaSetDevice(gpuIter));
-
-          // copy input data to GPU
-          gpuErrchk(cudaMemcpy(devCentInfo[gpuIter],
-                      newCentInfo, sizeof(cent)*numCent,
-                                  cudaMemcpyHostToDevice));
-      }
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-          gpuErrchk(cudaSetDevice(gpuIter));
-
-          // copy input data to GPU
-          gpuErrchk(cudaMemcpy(devCentData[gpuIter],
-                      newCentData, sizeof(DTYPE)*numCent*numDim,
-                                  cudaMemcpyHostToDevice));
-      }
+      gpuErrchk(cudaSetDevice(gpuIter));
+      gpuErrchk(cudaMemcpy(allCentInfo[gpuIter],
+                          devCentInfo[gpuIter], sizeof(CentInfo)*numCent,
+                          cudaMemcpyDeviceToHost));
     }
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+      gpuErrchk(cudaSetDevice(gpuIter));
+      gpuErrchk(cudaMemcpy(allCentData[gpuIter],
+                          devCentData[gpuIter], sizeof(DTYPE)*numCent*numDim,
+                          cudaMemcpyDeviceToHost));
+    }
+
+    calcWeightedMeans(newCentInfo, allCentInfo, newCentData, oldCentData,
+      allCentData, newMaxDriftArr, numCent, numGrp, numDim, numGPU);
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+        gpuErrchk(cudaSetDevice(gpuIter));
+
+        // copy input data to GPU
+        gpuErrchk(cudaMemcpy(devCentInfo[gpuIter],
+                    newCentInfo, sizeof(cent)*numCent,
+                                cudaMemcpyHostToDevice));
+    }
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+        gpuErrchk(cudaSetDevice(gpuIter));
+
+        // copy input data to GPU
+        gpuErrchk(cudaMemcpy(devCentData[gpuIter],
+                    newCentData, sizeof(DTYPE)*numCent*numDim,
+                                cudaMemcpyHostToDevice));
+    }
+  }
 
   unsigned int doesNotConverge = 1;
 
@@ -3121,7 +3147,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(cudaSetDevice(gpuIter));
-      clearDriftArr<<<NBLOCKS, BLOCKSIZE>>>(devMaxDriftArr[gpuIter], numGrp);
+      clearDriftArr<<<NBLOCKS[gpuIter], BLOCKSIZE>>>(devMaxDriftArr[gpuIter], numGrp);
 
     }
 
@@ -3131,7 +3157,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(cudaSetDevice(gpuIter));
-      calcCentData<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo[gpuIter],devCentInfo[gpuIter],
+      calcCentData<<<NBLOCKS[gpuIter], BLOCKSIZE>>>(devPointInfo[gpuIter],devCentInfo[gpuIter],
                                          devPointData[gpuIter],devOldCentSum[gpuIter],
                                          devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                          devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -3143,7 +3169,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(cudaSetDevice(gpuIter));
-      calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo[gpuIter],devCentInfo[gpuIter],
+      calcNewCentroids<<<NBLOCKS[gpuIter], BLOCKSIZE>>>(devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDriftArr[gpuIter],devOldCentCount[gpuIter],
@@ -3211,11 +3237,29 @@ double startSimpleOnGPU(PointInfo *pointInfo,
       }
     }
 
+    /*
+    if (numGPU == 2)
+    {
+      if (index == 20)
+      {
+        writeData(newCentData, numCent, numDim, "centroidsAt1_2gpu.txt");
+      }
+    }
+
+    if (numGPU == 3)
+    {
+      if (index == 20)
+      {
+        writeData(newCentData, numCent, numDim, "centroidsAt1_3gpu.txt");
+      }
+    }
+    */
+
     #pragma omp parallel for num_threads(numGPU)
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(cudaSetDevice(gpuIter));
-      assignPointsSimple<<<NBLOCKS,BLOCKSIZE,grpLclSize>>>(devPointInfo[gpuIter],
+      assignPointsSimple<<<NBLOCKS[gpuIter],BLOCKSIZE,grpLclSize>>>(devPointInfo[gpuIter],
                                                            devCentInfo[gpuIter],
                                                            devPointData[gpuIter],
                                                            devPointLwrs[gpuIter],
@@ -3231,7 +3275,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(cudaSetDevice(gpuIter));
-      checkConverge<<<NBLOCKS,BLOCKSIZE>>>(devPointInfo[gpuIter],
+      checkConverge<<<NBLOCKS[gpuIter],BLOCKSIZE>>>(devPointInfo[gpuIter],
                                            devConFlagArr[gpuIter],
                                            numPnts[gpuIter]);
 
@@ -3264,7 +3308,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(cudaSetDevice(gpuIter));
-    calcCentData<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo[gpuIter],devCentInfo[gpuIter],
+    calcCentData<<<NBLOCKS[gpuIter], BLOCKSIZE>>>(devPointInfo[gpuIter],devCentInfo[gpuIter],
                                         devPointData[gpuIter],devOldCentSum[gpuIter],
                                         devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                         devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -3275,7 +3319,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(cudaSetDevice(gpuIter));
-    calcNewCentroids<<<NBLOCKS, BLOCKSIZE>>>(devPointInfo[gpuIter],devCentInfo[gpuIter],
+    calcNewCentroids<<<NBLOCKS[gpuIter], BLOCKSIZE>>>(devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDriftArr[gpuIter],devOldCentCount[gpuIter],
