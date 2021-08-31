@@ -11,92 +11,92 @@ int runValidationTests(ImpType impCode)
   
   TestError testResult;
   
-  for(int i = 1; i < 5; i++)
+  if(impCode == MULTIGPUTEST)
   {
-    printf("\n");
-    
-    printf("Starting Test %d with data at ", testCounter);
-    testResult = testImpWithKeyImp(SIMPLEGPU, impCode, 1000000, 200, 20, 
-                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
+    testResult = runMultiGPUTests(MSD_SIZE, 100, 20, MSD_DIM, 1500, 3, MSD_PATH);
     printErrorMessage(testResult, testCounter);
-    testCounter++;
-    printf("\n");
-    
     if(testResult != testSuccess)
     failFlag = 1;
   }
+  else
+  {
+    for(int i = 1; i < 5; i++)
+    {
+      printf("\n");
+      
+      printf("Starting Test %d with data at ", testCounter);
+      testResult = testImpWithKeyImp(SIMPLEGPU, impCode, 1000000, 200, 20, 
+                                     32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
+      printErrorMessage(testResult, testCounter);
+      testCounter++;
+      printf("\n");
+      
+      if(testResult != testSuccess)
+      failFlag = 1;
+    }
+  }
+  
   
   return failFlag;
   
 }
 
-int runMultiGPUTests()
+TestError runMultiGPUTests(const int numPnt,
+                     const int numCent,
+                     const int numGrp,
+                     const int numDim,
+                     const int maxIter,
+                     const int numGPU,
+                     const char *filepath)
 {
-  int failFlag = 0;
   int testCounter = 0;
+  int gpuAvail = 0;
   
+  if(cudaGetDeviceCount(&gpuAvail) != cudaSuccess)
+  return noDeviceAvailable;
+  else if(gpuAvail < numGPU)
+  return notEnoughDevices;
+  else
+  printf("Found %d available devices\n", gpuAvail);
+  
+  fflush(stdout);
   TestError testResult;
+  TestError finalResult;
   
-  for(int i = 1; i < 5; i++)
-  {
-    printf("\n");
-    
-    printf("Starting Test %d with data at ", testCounter);
-    testResult = testImpWithKeyImp(SIMPLEGPU, SIMPLEGPU, 1000000, 200, 20, 
-                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
-    printErrorMessage(testResult, testCounter);
-    testCounter++;
-    printf("\n");
-    
-    if(testResult != testSuccess)
-    failFlag = 1;
-  }
+  testResult = testImpWithKeyImp(SIMPLEGPU, SIMPLEGPU, numPnt, numCent, numGrp, 
+                                 numDim, maxIter, 16, 1, numGPU, 0.0001, filepath, 1);
   
-  for(int i = 1; i < 5; i++)
-  {
-    printf("\n");
-    
-    printf("Starting Test %d with data at ", testCounter);
-    testResult = testImpWithKeyImp(FULLGPU, FULLGPU, 1000000, 200, 20, 
-                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
-    printErrorMessage(testResult, testCounter);
-    testCounter++;
-    printf("\n");
-    
-    if(testResult != testSuccess)
-    failFlag = 1;
-  }
+  if(testResult != testSuccess)
+  finalResult = testResult;
+
+  printf("\n");
   
-  for(int i = 1; i < 5; i++)
-  {
-    printf("\n");
-    
-    printf("Starting Test %d with data at ", testCounter);
-    testResult = testImpWithKeyImp(SUPERGPU, SUPERGPU, 1000000, 200, 20, 
-                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
-    printErrorMessage(testResult, testCounter);
-    testCounter++;
-    printf("\n");
-    
-    if(testResult != testSuccess)
-    failFlag = 1;
-  }
-  for(int i = 1; i < 5; i++)
-  {
-    printf("\n");
-    
-    printf("Starting Test %d with data at ", testCounter);
-    testResult = testImpWithKeyImp(LLOYDGPU, LLOYDGPU, 1000000, 200, 20, 
-                                   32, 500, 16, 1, i, 0.0001, THIRTY_TWO_PATH, 1);
-    printErrorMessage(testResult, testCounter);
-    testCounter++;
-    printf("\n");
-    
-    if(testResult != testSuccess)
-    failFlag = 1;
-  }
+  testResult = testImpWithKeyImp(FULLGPU, FULLGPU, numPnt, numCent, numGrp, 
+                                 numDim, maxIter, 16, 1, numGPU, 0.0001, filepath, 1);
   
-  return failFlag;
+  if(testResult != testSuccess)
+  finalResult = testResult;
+
+  
+  printf("Starting Test %d with data at ", testCounter);
+  testResult = testImpWithKeyImp(SUPERGPU, SUPERGPU, numPnt, numCent, numGrp, 
+                                 numDim, maxIter, 16, 1, numGPU, 0.0001, filepath, 1);
+ 
+  if(testResult != testSuccess)
+  finalResult = testResult;
+  
+  
+  printf("\n");
+  
+  printf("Starting Test %d with data at ", testCounter);
+  testResult = testImpWithKeyImp(LLOYDGPU, LLOYDGPU, numPnt, numCent, numGrp, 
+                                 numDim, maxIter, 16, 1, numGPU, 0.0001, filepath, 1);
+  
+  if(testResult != testSuccess)
+  finalResult = testResult;
+  
+  
+  return finalResult;
   
 }
 
@@ -353,6 +353,8 @@ TestError testImpWithKeyImp(ImpType keyImp,
   unsigned long long int *keyCountPtr = NULL;
   unsigned long long int *testCountPtr = NULL;
   
+  TestError runResult;
+  
   if(countFlag)
   {
     keyCountPtr = &keyCount;
@@ -372,9 +374,12 @@ TestError testImpWithKeyImp(ImpType keyImp,
   DTYPE *keyCentData = NULL;
   printf("  Starting "); printImpName(keyImp); printf(" on %d GPU's/%d threads\n", keyNumGPU, numThread);
   
-  chooseAndRunImp(keyImp, &keyPointInfo, &keyCentInfo, &pointData, &keyCentData,
+  runResult = chooseAndRunImp(keyImp, &keyPointInfo, &keyCentInfo, &pointData, &keyCentData,
                   numPnt, numCent, numGrp, numDim, maxIter, numThread, keyNumGPU,
                   &keyRuntime, &keyRanIter, filepath, NULL, keyCountPtr);
+  
+  if(runResult != testSuccess)
+  return runResult;
   
   printf("  "); printImpName(testImp); printf(" complete\n");
 
@@ -388,9 +393,12 @@ TestError testImpWithKeyImp(ImpType keyImp,
   DTYPE *testCentData = NULL;
   printf("  Starting "); printImpName(testImp); printf(" on %d GPU's/%d threads\n", testNumGPU, numThread);
   
-  chooseAndRunImp(testImp, &testPointInfo, &testCentInfo, &pointData, &testCentData,
+  runResult = chooseAndRunImp(testImp, &testPointInfo, &testCentInfo, &pointData, &testCentData,
                   numPnt, numCent, numGrp, numDim, maxIter, numThread, testNumGPU,
                   &testRuntime, &testRanIter, filepath, NULL, testCountPtr);
+                  
+  if(runResult != testSuccess)
+  return runResult;
   
   printf("  "); printImpName(testImp); printf(" complete\n");
 
@@ -432,80 +440,45 @@ TestError testImpWithKeyFile(ImpType testImp,
                              const int numGPU,
                              DTYPE tolerance,
                              char *filepath,
-                             const char *keyFilepath)
+                             const char *keyFilepath,
+                             const int countFlag)
 {
   unsigned int ranIter;
+  unsigned long long int count;
+  unsigned long long int *countPtr = NULL;
+  if(countFlag)
+  countPtr = &count;
   
-  // create necessary data structures
-  PointInfo *pointInfo = (PointInfo *)malloc(sizeof(PointInfo) * numPnt);
-  DTYPE *pointData = (DTYPE *)malloc(sizeof(DTYPE) * numPnt * numDim);
+  double runtime;
+  
+  PointInfo *testPointInfo = NULL;
+  CentInfo *testCentInfo = NULL;
+  DTYPE *testPointData = NULL;
+  DTYPE *testCentData = NULL;
+  
+  
+  printf("  Starting "); printImpName(testImp); printf(" on %d GPU's/%d threads\n", numGPU, numThread);
+  chooseAndRunImp(testImp, &testPointInfo, &testCentInfo, &testPointData, 
+                  &testCentData, numPnt, numCent, numGrp, numDim, maxIter,
+                  numThread, numGPU, &runtime, &ranIter, filepath, NULL, countPtr);
+  
+  printf("  "); printImpName(testImp); printf(" complete\n");
 
-  // import dataset
-  if(importPoints(filepath, pointInfo, pointData, numPnt, numDim))
-  return importError;
-
-  CentInfo *centInfo = (CentInfo *)malloc(sizeof(CentInfo) * numCent);
-  DTYPE *centData = (DTYPE *)malloc(sizeof(DTYPE) * numCent * numDim);
-
-  if(generateCentWithData(centInfo, centData, pointData, numCent, numPnt, numDim))
-  return centGenError;
-
-  switch(testImp)
-  {
-    case FULLGPU:
-      warmupGPU(numGPU);
-      startFullOnGPU(pointInfo, centInfo, pointData, centData,
-                     numPnt, numCent, numGrp, numDim, maxIter, numGPU, &ranIter);
-      break;
-    case SIMPLEGPU:
-      warmupGPU(numGPU);
-      startSimpleOnGPU(pointInfo, centInfo, pointData, centData,
-                       numPnt, numCent, numGrp, numDim, maxIter, numGPU, &ranIter);
-      break;
-    case SUPERGPU:
-      warmupGPU(numGPU);
-      startSuperOnGPU(pointInfo, centInfo, pointData, centData,
-                      numPnt, numCent, numDim, maxIter, numGPU, &ranIter);
-      break;
-    case LLOYDGPU:
-      warmupGPU(numGPU);
-      startLloydOnGPU(pointInfo, centInfo, pointData, centData,
-                      numPnt, numCent, numDim, maxIter, numGPU, &ranIter);
-      break;
-    case FULLCPU:
-      startFullOnCPU(pointInfo, centInfo, pointData, centData,
-                     numPnt, numCent, numGrp, numDim, numThread, maxIter, &ranIter);
-      break;
-    case SIMPLECPU:
-      startSimpleOnCPU(pointInfo, centInfo, pointData, centData,
-                       numPnt, numCent, numGrp, numDim, numThread, maxIter, &ranIter);
-      break;
-    case SUPERCPU:
-      startSuperOnCPU(pointInfo, centInfo, pointData, centData,
-                      numPnt, numCent, numDim, numThread, maxIter, &ranIter);
-      break;
-    case LLOYDCPU:
-      startLloydOnCPU(pointInfo, centInfo, pointData, centData,
-                      numPnt, numCent, numDim, numThread, maxIter, &ranIter);
-      break;
-    default: 
-      free(pointInfo);
-      free(pointData);
-      free(centInfo);
-      free(centData);
-      return unknownImpError;
-  }
+  printf("  Test Implementation runtime: %f\n", runtime);
+  printf("  Test iterations ran: %d\n", ranIter);
+  if(countFlag)
+  printf("  Test distance calculations: %llu\n", count);
   
   
   DTYPE *keyCentData = (DTYPE *)malloc(sizeof(DTYPE) * numCent * numDim);
   importData(keyCentData, numCent, numDim, keyFilepath);
   
-  int testResult = compareData(keyCentData, centData, tolerance, numCent, numDim);
+  int testResult = compareData(keyCentData, testCentData, tolerance, numCent, numDim);
   
-  free(pointInfo);
-  free(pointData);
-  free(centInfo);
-  free(centData);
+  free(testPointInfo);
+  free(testPointData);
+  free(testCentInfo);
+  free(testCentData);
   free(keyCentData);
   
   
@@ -527,30 +500,44 @@ void printErrorMessage(TestError errCode, int testNum)
       printf("\n");
       break;
     case testFailedCent:
-      printf("FAILED: Test %d failed\n", testNum);
+      printf("FAILED: Test %d failed because ", testNum);
       printf("  Final centroids did not match within the given tolerance.");
       printf("\n");
       break;
     case testFailedAssign:
-      printf("FAILED: Test %d failed\n", testNum);
-      printf("  Final Point Cluster Assignments did not match.");
+      printf("FAILED: Test %d failed because ", testNum);
+      printf("Final Point Cluster Assignments did not match.");
       printf("\n");
       break;
     case importError:
-      printf("Error occurred! ");
-      printf("  Dataset could not be imported properly.");
+      printf("Error occurred: ");
+      printf("Dataset could not be imported properly.");
       printf("\n");
       break;
     case centGenError:
-      printf("Error occurred! ");
-      printf("  Centroids failed to generate from given dataset.");
+      printf("Error occurred: ");
+      printf("Centroids failed to generate from given dataset.");
       printf("\n");
       break;
     case unknownImpError:
-      printf("Error occurred! ");
-      printf("  An unknown implementation was passed to the test function.");
+      printf("Error occurred: ");
+      printf("An unknown implementation was passed to the test function.");
       printf("\n");
       break;
+    case noDeviceAvailable:
+      printf("Error occurred: ");
+      printf("There are no devices available!");
+      printf("\n");
+      break;
+    case notEnoughDevices:
+      printf("Error occurred: ");
+      printf("There are not enough devices available!");
+      printf("\n");
+      break;
+    default:
+      printf("Error occurred: ");
+      printf("A generic error occurred.");
+      printf("\n");
   }
 }
 
@@ -593,6 +580,12 @@ void printTestParameters(ImpType keyImp,
     case LLOYDCPU:
       printf("Lloyd's CPU with %d threads", numThread);
       break;
+    case KEYFILE:
+      printf("Key file");
+      break;
+    default:
+      printf("Unknown Implementation");
+      break;
   }
   printf("\n  Key Implementation: ");
   switch(keyImp)
@@ -620,6 +613,12 @@ void printTestParameters(ImpType keyImp,
       break;
     case LLOYDCPU:
       printf("Lloyd's CPU with %d threads", numThread);
+      break;
+    case KEYFILE:
+      printf("Key file");
+      break;
+    default:
+      printf("Unknown Implementation");
       break;
   }
   printf("\n  Parameters:\n");
