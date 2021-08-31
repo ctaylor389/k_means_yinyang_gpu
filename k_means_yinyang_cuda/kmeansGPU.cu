@@ -612,16 +612,36 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   int gpuIter;
 
   int numPnts[numGPU];
-  for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-  {
-    if (numPnt % numGPU != 0 && gpuIter == numGPU-1)
-    {
-      numPnts[gpuIter] = (numPnt / numGPU) + (numPnt % numGPU);
-    }
 
-    else
+  int remainder = numPnt % numGPU;
+
+  if (remainder > 1)
+  {
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
-      numPnts[gpuIter] = numPnt / numGPU;
+      if (gpuIter >= numGPU - remainder)
+      {
+        numPnts[gpuIter] = (numPnt / numGPU) + 1;
+      }
+      else
+      {
+        numPnts[gpuIter] = numPnt / numGPU;
+      }
+    }
+  }
+
+  else
+  {
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+      if (remainder != 0 && gpuIter == numGPU-1)
+      {
+        numPnts[gpuIter] = (numPnt / numGPU) + (remainder);
+      }
+      else
+      {
+        numPnts[gpuIter] = numPnt / numGPU;
+      }
     }
   }
 

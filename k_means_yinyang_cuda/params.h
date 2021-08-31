@@ -22,6 +22,8 @@ typedef enum
   SUPERCPU,
   LLOYDGPU,
   LLOYDCPU,
+  MULTIGPUTEST,
+  KEYFILE,
   INVALIDIMP
 } ImpType;
 
