@@ -20,12 +20,20 @@ typedef enum{
   testFailedAssign,
   importError,
   centGenError,
-  unknownImpError
+  unknownImpError,
+  noDeviceAvailable,
+  notEnoughDevices
   
 } TestError;
 
 int runValidationTests(ImpType impCode);
-int runMultiGPUTests();
+TestError runMultiGPUTests(const int numPnt,
+                     const int numCent,
+                     const int numGrp,
+                     const int numDim,
+                     const int maxIter,
+                     const int numGPU,
+                     const char *filepath);
 
 
 TestError chooseAndRunImp(ImpType imp,
@@ -83,7 +91,8 @@ TestError testImpWithKeyFile(ImpType testImp,
                              const int numGPU,
                              DTYPE tolerance,
                              const char *filepath, 
-                             const char *keyFilepath);
+                             const char *keyFilepath,
+                             const int countFlag);
 
 
 

@@ -66,7 +66,11 @@ double startFullOnGPU(PointInfo *pointInfo,
 
   int index = 1;
 
-  unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
+  unsigned int NBLOCKS[numGPU]; 
+  for (int i = 0; i < numGPU; i++)
+  {
+    NBLOCKS[i] = ceil(numPnts[i]*1.0/BLOCKSIZE*1.0);
+  }
 
   // group centroids
   groupCent(centInfo, centData, numCent, numGrp, numDim);
@@ -83,6 +87,16 @@ double startFullOnGPU(PointInfo *pointInfo,
   DTYPE *devPointData[numGPU];
   DTYPE *devPointLwrs[numGPU];
 
+  int currentAllocations[numGPU];
+  for (int i = 0; i < numGPU; i++)
+  {
+    currentAllocations[i] = 0;
+    for (int j = 0; j < i; j++)
+    {
+      currentAllocations[i] += numPnts[j];
+    }
+  }
+
   #pragma omp parallel for num_threads(numGPU)
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
@@ -93,14 +107,14 @@ double startFullOnGPU(PointInfo *pointInfo,
 
     // copy input data to GPU
     gpuErrchk(hipMemcpy(devPointInfo[gpuIter],
-                         pointInfo+(gpuIter*numPnt/numGPU),
+                         pointInfo+currentAllocations[gpuIter],
                          (numPnts[gpuIter])*sizeof(PointInfo),
                          hipMemcpyHostToDevice));
 
     gpuErrchk(hipMalloc(&devPointData[gpuIter], sizeof(DTYPE) * numPnts[gpuIter] * numDim));
 
     gpuErrchk(hipMemcpy(devPointData[gpuIter],
-                         pointData+((gpuIter*numPnt/numGPU) * numDim),
+                         pointData+(currentAllocations[gpuIter] * numDim),
                          sizeof(DTYPE)*numPnts[gpuIter]*numDim,
                          hipMemcpyHostToDevice));
 
@@ -108,7 +122,7 @@ double startFullOnGPU(PointInfo *pointInfo,
                          numGrp));
 
     gpuErrchk(hipMemcpy(devPointLwrs[gpuIter],
-                         pointLwrs+((gpuIter*numPnt/numGPU) * numGrp),
+                         pointLwrs+(currentAllocations[gpuIter] * numGrp),
                          sizeof(DTYPE)*numPnts[gpuIter]*numGrp,
                          hipMemcpyHostToDevice));
   }
@@ -196,7 +210,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearCentCalcData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
+    hipLaunchKernelGGL(clearCentCalcData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
                                               devOldCentSum[gpuIter],
                                               devNewCentCount[gpuIter],
                                               devOldCentCount[gpuIter],
@@ -209,7 +223,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
+    hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
   }
 
   #pragma omp parallel for num_threads(numGPU)
@@ -217,7 +231,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(hipSetDevice(gpuIter));
     // do single run of naive kmeans for initial centroid assignments
-    hipLaunchKernelGGL(initRunKernel, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+    hipLaunchKernelGGL(initRunKernel, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                          devCentInfo[gpuIter],
                                          devPointData[gpuIter],
                                          devPointLwrs[gpuIter],
@@ -338,7 +352,7 @@ double startFullOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
+      hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
 
     }
 
@@ -348,7 +362,7 @@ double startFullOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+      hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                          devPointData[gpuIter],devOldCentSum[gpuIter],
                                          devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                          devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -360,7 +374,7 @@ double startFullOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+      hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDriftArr[gpuIter],devOldCentCount[gpuIter],
@@ -432,7 +446,7 @@ double startFullOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(assignPointsFull, dim3(NBLOCKS), dim3(BLOCKSIZE), grpLclSize, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(assignPointsFull, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), grpLclSize, 0, devPointInfo[gpuIter],
                                                            devCentInfo[gpuIter],
                                                            devPointData[gpuIter],
                                                            devPointLwrs[gpuIter],
@@ -447,7 +461,7 @@ double startFullOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                            devConFlagArr[gpuIter],
                                            numPnts[gpuIter]);
 
@@ -478,7 +492,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+    hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                         devPointData[gpuIter],devOldCentSum[gpuIter],
                                         devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                         devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -489,7 +503,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+    hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDriftArr[gpuIter],devOldCentCount[gpuIter],
@@ -644,7 +658,11 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
   int index = 1;
 
-  unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
+  unsigned int NBLOCKS[numGPU]; 
+  for (int i = 0; i < numGPU; i++)
+  {
+    NBLOCKS[i] = ceil(numPnts[i]*1.0/BLOCKSIZE*1.0);
+  }
 
   // group centroids
   groupCent(centInfo, centData, numCent, numGrp, numDim);
@@ -661,6 +679,16 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   DTYPE *devPointData[numGPU];
   DTYPE *devPointLwrs[numGPU];
 
+  int currentAllocations[numGPU];
+  for (int i = 0; i < numGPU; i++)
+  {
+    currentAllocations[i] = 0;
+    for (int j = 0; j < i; j++)
+    {
+      currentAllocations[i] += numPnts[j];
+    }
+  }
+
   #pragma omp parallel for num_threads(numGPU)
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
@@ -671,14 +699,14 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
     // copy input data to GPU
     gpuErrchk(hipMemcpy(devPointInfo[gpuIter],
-                         pointInfo+(gpuIter*numPnt/numGPU),
+                         pointInfo+currentAllocations[gpuIter],
                          (numPnts[gpuIter])*sizeof(PointInfo),
                          hipMemcpyHostToDevice));
 
     gpuErrchk(hipMalloc(&devPointData[gpuIter], sizeof(DTYPE) * numPnts[gpuIter] * numDim));
 
     gpuErrchk(hipMemcpy(devPointData[gpuIter],
-                         pointData+((gpuIter*numPnt/numGPU) * numDim),
+                         pointData+(currentAllocations[gpuIter] * numDim),
                          sizeof(DTYPE)*numPnts[gpuIter]*numDim,
                          hipMemcpyHostToDevice));
 
@@ -686,7 +714,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                          numGrp));
 
     gpuErrchk(hipMemcpy(devPointLwrs[gpuIter],
-                         pointLwrs+((gpuIter*numPnt/numGPU) * numGrp),
+                         pointLwrs+(currentAllocations[gpuIter] * numGrp),
                          sizeof(DTYPE)*numPnts[gpuIter]*numGrp,
                          hipMemcpyHostToDevice));
   }
@@ -774,7 +802,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearCentCalcData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
+    hipLaunchKernelGGL(clearCentCalcData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
                                               devOldCentSum[gpuIter],
                                               devNewCentCount[gpuIter],
                                               devOldCentCount[gpuIter],
@@ -787,7 +815,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
+    hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
   }
 
   #pragma omp parallel for num_threads(numGPU)
@@ -795,7 +823,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(hipSetDevice(gpuIter));
     // do single run of naive kmeans for initial centroid assignments
-    hipLaunchKernelGGL(initRunKernel, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+    hipLaunchKernelGGL(initRunKernel, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                          devCentInfo[gpuIter],
                                          devPointData[gpuIter],
                                          devPointLwrs[gpuIter],
@@ -839,50 +867,50 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   }
 
   if (numGPU > 1)
+  {
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-        gpuErrchk(hipSetDevice(gpuIter));
-        gpuErrchk(hipMemcpy(allCentInfo[gpuIter],
-                            devCentInfo[gpuIter], sizeof(CentInfo)*numCent,
-                            hipMemcpyDeviceToHost));
-      }
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-        gpuErrchk(hipSetDevice(gpuIter));
-        gpuErrchk(hipMemcpy(allCentData[gpuIter],
-                            devCentData[gpuIter], sizeof(DTYPE)*numCent*numDim,
-                            hipMemcpyDeviceToHost));
-      }
-
-      calcWeightedMeans(newCentInfo, allCentInfo, newCentData, oldCentData,
-        allCentData, newMaxDriftArr, numCent, numGrp, numDim, numGPU);
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-          gpuErrchk(hipSetDevice(gpuIter));
-
-          // copy input data to GPU
-          gpuErrchk(hipMemcpy(devCentInfo[gpuIter],
-                      newCentInfo, sizeof(cent)*numCent,
-                                  hipMemcpyHostToDevice));
-      }
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-          gpuErrchk(hipSetDevice(gpuIter));
-
-          // copy input data to GPU
-          gpuErrchk(hipMemcpy(devCentData[gpuIter],
-                      newCentData, sizeof(DTYPE)*numCent*numDim,
-                                  hipMemcpyHostToDevice));
-      }
+      gpuErrchk(hipSetDevice(gpuIter));
+      gpuErrchk(hipMemcpy(allCentInfo[gpuIter],
+                          devCentInfo[gpuIter], sizeof(CentInfo)*numCent,
+                          hipMemcpyDeviceToHost));
     }
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+      gpuErrchk(hipSetDevice(gpuIter));
+      gpuErrchk(hipMemcpy(allCentData[gpuIter],
+                          devCentData[gpuIter], sizeof(DTYPE)*numCent*numDim,
+                          hipMemcpyDeviceToHost));
+    }
+
+    calcWeightedMeans(newCentInfo, allCentInfo, newCentData, oldCentData,
+      allCentData, newMaxDriftArr, numCent, numGrp, numDim, numGPU);
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+        gpuErrchk(hipSetDevice(gpuIter));
+
+        // copy input data to GPU
+        gpuErrchk(hipMemcpy(devCentInfo[gpuIter],
+                    newCentInfo, sizeof(cent)*numCent,
+                                hipMemcpyHostToDevice));
+    }
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+        gpuErrchk(hipSetDevice(gpuIter));
+
+        // copy input data to GPU
+        gpuErrchk(hipMemcpy(devCentData[gpuIter],
+                    newCentData, sizeof(DTYPE)*numCent*numDim,
+                                hipMemcpyHostToDevice));
+    }
+  }
 
   unsigned int doesNotConverge = 1;
 
@@ -916,7 +944,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
+      hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
 
     }
 
@@ -926,7 +954,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+      hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                          devPointData[gpuIter],devOldCentSum[gpuIter],
                                          devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                          devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -938,7 +966,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+      hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDriftArr[gpuIter],devOldCentCount[gpuIter],
@@ -1010,7 +1038,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(assignPointsSimple, dim3(NBLOCKS), dim3(BLOCKSIZE), grpLclSize, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(assignPointsSimple, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), grpLclSize, 0, devPointInfo[gpuIter],
                                                            devCentInfo[gpuIter],
                                                            devPointData[gpuIter],
                                                            devPointLwrs[gpuIter],
@@ -1025,7 +1053,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                            devConFlagArr[gpuIter],
                                            numPnts[gpuIter]);
 
@@ -1056,7 +1084,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+    hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                         devPointData[gpuIter],devOldCentSum[gpuIter],
                                         devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                         devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -1067,7 +1095,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+    hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDriftArr[gpuIter],devOldCentCount[gpuIter],
@@ -1219,7 +1247,11 @@ double startSuperOnGPU(PointInfo *pointInfo,
 
   int index = 1;
 
-  unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
+  unsigned int NBLOCKS[numGPU]; 
+  for (int i = 0; i < numGPU; i++)
+  {
+    NBLOCKS[i] = ceil(numPnts[i]*1.0/BLOCKSIZE*1.0);
+  }
 
   // group centroids
   for(int j = 0; j < numCent; j++)
@@ -1239,6 +1271,16 @@ double startSuperOnGPU(PointInfo *pointInfo,
   DTYPE *devPointData[numGPU];
   DTYPE *devPointLwrs[numGPU];
 
+  int currentAllocations[numGPU];
+  for (int i = 0; i < numGPU; i++)
+  {
+    currentAllocations[i] = 0;
+    for (int j = 0; j < i; j++)
+    {
+      currentAllocations[i] += numPnts[j];
+    }
+  }
+
   #pragma omp parallel for num_threads(numGPU)
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
@@ -1249,21 +1291,21 @@ double startSuperOnGPU(PointInfo *pointInfo,
 
     // copy input data to GPU
     gpuErrchk(hipMemcpy(devPointInfo[gpuIter],
-                         pointInfo+(gpuIter*numPnt/numGPU),
+                         pointInfo+currentAllocations[gpuIter],
                          (numPnts[gpuIter])*sizeof(PointInfo),
                          hipMemcpyHostToDevice));
 
     gpuErrchk(hipMalloc(&devPointData[gpuIter], sizeof(DTYPE) * numPnts[gpuIter] * numDim));
 
     gpuErrchk(hipMemcpy(devPointData[gpuIter],
-                         pointData+((gpuIter*numPnt/numGPU) * numDim),
+                         pointData+(currentAllocations[gpuIter] * numDim),
                          sizeof(DTYPE)*numPnts[gpuIter]*numDim,
                          hipMemcpyHostToDevice));
 
     gpuErrchk(hipMalloc(&devPointLwrs[gpuIter], sizeof(DTYPE) * numPnts[gpuIter]));
 
     gpuErrchk(hipMemcpy(devPointLwrs[gpuIter],
-                         pointLwrs+((gpuIter*numPnt/numGPU)),
+                         pointLwrs+currentAllocations[gpuIter],
                          sizeof(DTYPE)*numPnts[gpuIter],
                          hipMemcpyHostToDevice));
   }
@@ -1355,7 +1397,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearCentCalcData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
+    hipLaunchKernelGGL(clearCentCalcData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
                                               devOldCentSum[gpuIter],
                                               devNewCentCount[gpuIter],
                                               devOldCentCount[gpuIter],
@@ -1368,7 +1410,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devMaxDrift[gpuIter], 1);
+    hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devMaxDrift[gpuIter], 1);
   }
 
   // do single run of naive kmeans for initial centroid assignments
@@ -1376,7 +1418,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(initRunKernel, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+    hipLaunchKernelGGL(initRunKernel, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                          devCentInfo[gpuIter],
                                          devPointData[gpuIter],
                                          devPointLwrs[gpuIter],
@@ -1498,7 +1540,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devMaxDrift[gpuIter], 1);
+      hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devMaxDrift[gpuIter], 1);
 
     }
 
@@ -1507,7 +1549,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+      hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                          devPointData[gpuIter],devOldCentSum[gpuIter],
                                          devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                          devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -1519,7 +1561,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+      hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDrift[gpuIter],
@@ -1593,7 +1635,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(assignPointsSuper, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(assignPointsSuper, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                                            devCentInfo[gpuIter],
                                                            devPointData[gpuIter],
                                                            devPointLwrs[gpuIter],
@@ -1608,7 +1650,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                            devConFlagArr[gpuIter],
                                            numPnts[gpuIter]);
 
@@ -1639,7 +1681,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+    hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                         devPointData[gpuIter],devOldCentSum[gpuIter],
                                         devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                         devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -1650,7 +1692,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+    hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDrift[gpuIter],devOldCentCount[gpuIter],
@@ -1800,11 +1842,25 @@ double startLloydOnGPU(PointInfo *pointInfo,
 
   int index = 1;
 
-  unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
+  unsigned int NBLOCKS[numGPU]; 
+  for (int i = 0; i < numGPU; i++)
+  {
+    NBLOCKS[i] = ceil(numPnts[i]*1.0/BLOCKSIZE*1.0);
+  }
 
   // store dataset on device
   PointInfo *devPointInfo[numGPU];
   DTYPE *devPointData[numGPU];
+
+  int currentAllocations[numGPU];
+  for (int i = 0; i < numGPU; i++)
+  {
+    currentAllocations[i] = 0;
+    for (int j = 0; j < i; j++)
+    {
+      currentAllocations[i] += numPnts[j];
+    }
+  }
 
   #pragma omp parallel for num_threads(numGPU)
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
@@ -1816,14 +1872,14 @@ double startLloydOnGPU(PointInfo *pointInfo,
 
     // copy input data to GPU
     gpuErrchk(hipMemcpy(devPointInfo[gpuIter],
-                         pointInfo+(gpuIter*numPnt/numGPU),
+                         pointInfo+currentAllocations[gpuIter],
                          (numPnts[gpuIter])*sizeof(PointInfo),
                          hipMemcpyHostToDevice));
 
     gpuErrchk(hipMalloc(&devPointData[gpuIter], sizeof(DTYPE) * numPnts[gpuIter] * numDim));
 
     gpuErrchk(hipMemcpy(devPointData[gpuIter],
-                         pointData+((gpuIter*numPnt/numGPU) * numDim),
+                         pointData+(currentAllocations[gpuIter] * numDim),
                          sizeof(DTYPE)*numPnts[gpuIter]*numDim,
                          hipMemcpyHostToDevice));
   }
@@ -1883,7 +1939,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearCentCalcDataLloyd, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
+    hipLaunchKernelGGL(clearCentCalcDataLloyd, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
                                               devNewCentCount[gpuIter],
                                               numCent,
                                               numDim);
@@ -1941,7 +1997,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(assignPointsLloyd, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(assignPointsLloyd, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                                devCentInfo[gpuIter],
                                                devPointData[gpuIter],
                                                devCentData[gpuIter],
@@ -1955,7 +2011,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(clearCentCalcDataLloyd, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
+      hipLaunchKernelGGL(clearCentCalcDataLloyd, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
                                          devNewCentCount[gpuIter],
                                          numCent,numDim);
 
@@ -1966,7 +2022,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcCentDataLloyd, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(calcCentDataLloyd, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                          devPointData[gpuIter],
                                          devNewCentSum[gpuIter],
                                          devNewCentCount[gpuIter],
@@ -1979,7 +2035,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcNewCentroidsLloyd, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(calcNewCentroidsLloyd, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                              devCentInfo[gpuIter],
                                              devCentData[gpuIter],
                                              devNewCentSum[gpuIter],
@@ -2043,7 +2099,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                            devConFlagArr[gpuIter],
                                            numPnts[gpuIter]);
     }
@@ -2229,7 +2285,11 @@ double startFullOnGPU(PointInfo *pointInfo,
 
   int index = 1;
 
-  unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
+  unsigned int NBLOCKS[numGPU]; 
+  for (int i = 0; i < numGPU; i++)
+  {
+    NBLOCKS[i] = ceil(numPnts[i]*1.0/BLOCKSIZE*1.0);
+  }
 
   // group centroids
   groupCent(centInfo, centData, numCent, numGrp, numDim);
@@ -2246,6 +2306,16 @@ double startFullOnGPU(PointInfo *pointInfo,
   DTYPE *devPointData[numGPU];
   DTYPE *devPointLwrs[numGPU];
 
+  int currentAllocations[numGPU];
+  for (int i = 0; i < numGPU; i++)
+  {
+    currentAllocations[i] = 0;
+    for (int j = 0; j < i; j++)
+    {
+      currentAllocations[i] += numPnts[j];
+    }
+  }
+
   #pragma omp parallel for num_threads(numGPU)
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
@@ -2256,14 +2326,14 @@ double startFullOnGPU(PointInfo *pointInfo,
 
     // copy input data to GPU
     gpuErrchk(hipMemcpy(devPointInfo[gpuIter],
-                         pointInfo+(gpuIter*numPnt/numGPU),
+                         pointInfo+currentAllocations[gpuIter],
                          (numPnts[gpuIter])*sizeof(PointInfo),
                          hipMemcpyHostToDevice));
 
     gpuErrchk(hipMalloc(&devPointData[gpuIter], sizeof(DTYPE) * numPnts[gpuIter] * numDim));
 
     gpuErrchk(hipMemcpy(devPointData[gpuIter],
-                         pointData+((gpuIter*numPnt/numGPU) * numDim),
+                         pointData+(currentAllocations[gpuIter] * numDim),
                          sizeof(DTYPE)*numPnts[gpuIter]*numDim,
                          hipMemcpyHostToDevice));
 
@@ -2271,7 +2341,7 @@ double startFullOnGPU(PointInfo *pointInfo,
                          numGrp));
 
     gpuErrchk(hipMemcpy(devPointLwrs[gpuIter],
-                         pointLwrs+((gpuIter*numPnt/numGPU) * numGrp),
+                         pointLwrs+(currentAllocations[gpuIter] * numGrp),
                          sizeof(DTYPE)*numPnts[gpuIter]*numGrp,
                          hipMemcpyHostToDevice));
   }
@@ -2359,7 +2429,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearCentCalcData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
+    hipLaunchKernelGGL(clearCentCalcData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
                                               devOldCentSum[gpuIter],
                                               devNewCentCount[gpuIter],
                                               devOldCentCount[gpuIter],
@@ -2372,7 +2442,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
+    hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
   }
 
   #pragma omp parallel for num_threads(numGPU)
@@ -2380,7 +2450,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(hipSetDevice(gpuIter));
     // do single run of naive kmeans for initial centroid assignments
-    hipLaunchKernelGGL(initRunKernel, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+    hipLaunchKernelGGL(initRunKernel, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                          devCentInfo[gpuIter],
                                          devPointData[gpuIter],
                                          devPointLwrs[gpuIter],
@@ -2502,7 +2572,7 @@ double startFullOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
+      hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
 
     }
 
@@ -2512,7 +2582,7 @@ double startFullOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+      hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                          devPointData[gpuIter],devOldCentSum[gpuIter],
                                          devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                          devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -2524,7 +2594,7 @@ double startFullOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+      hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDriftArr[gpuIter],devOldCentCount[gpuIter],
@@ -2596,7 +2666,7 @@ double startFullOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(assignPointsFull, dim3(NBLOCKS), dim3(BLOCKSIZE), grpLclSize, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(assignPointsFull, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), grpLclSize, 0, devPointInfo[gpuIter],
                                                            devCentInfo[gpuIter],
                                                            devPointData[gpuIter],
                                                            devPointLwrs[gpuIter],
@@ -2612,7 +2682,7 @@ double startFullOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                            devConFlagArr[gpuIter],
                                            numPnts[gpuIter]);
 
@@ -2645,7 +2715,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+    hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                         devPointData[gpuIter],devOldCentSum[gpuIter],
                                         devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                         devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -2656,7 +2726,7 @@ double startFullOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+    hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDriftArr[gpuIter],devOldCentCount[gpuIter],
@@ -2849,7 +2919,12 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
   int index = 1;
 
-  unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
+  unsigned int NBLOCKS[numGPU]; 
+  for (int i = 0; i < numGPU; i++)
+  {
+    NBLOCKS[i] = ceil(numPnts[i]*1.0/BLOCKSIZE*1.0);
+  }
+
 
   // group centroids
   groupCent(centInfo, centData, numCent, numGrp, numDim);
@@ -2866,6 +2941,16 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   DTYPE *devPointData[numGPU];
   DTYPE *devPointLwrs[numGPU];
 
+  int currentAllocations[numGPU];
+  for (int i = 0; i < numGPU; i++)
+  {
+    currentAllocations[i] = 0;
+    for (int j = 0; j < i; j++)
+    {
+      currentAllocations[i] += numPnts[j];
+    }
+  }
+
   #pragma omp parallel for num_threads(numGPU)
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
@@ -2876,14 +2961,14 @@ double startSimpleOnGPU(PointInfo *pointInfo,
 
     // copy input data to GPU
     gpuErrchk(hipMemcpy(devPointInfo[gpuIter],
-                         pointInfo+(gpuIter*numPnt/numGPU),
+                         pointInfo+currentAllocations[gpuIter],
                          (numPnts[gpuIter])*sizeof(PointInfo),
                          hipMemcpyHostToDevice));
 
     gpuErrchk(hipMalloc(&devPointData[gpuIter], sizeof(DTYPE) * numPnts[gpuIter] * numDim));
 
     gpuErrchk(hipMemcpy(devPointData[gpuIter],
-                         pointData+((gpuIter*numPnt/numGPU) * numDim),
+                         pointData+(currentAllocations[gpuIter] * numDim),
                          sizeof(DTYPE)*numPnts[gpuIter]*numDim,
                          hipMemcpyHostToDevice));
 
@@ -2891,7 +2976,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
                          numGrp));
 
     gpuErrchk(hipMemcpy(devPointLwrs[gpuIter],
-                         pointLwrs+((gpuIter*numPnt/numGPU) * numGrp),
+                         pointLwrs+(currentAllocations[gpuIter] * numGrp),
                          sizeof(DTYPE)*numPnts[gpuIter]*numGrp,
                          hipMemcpyHostToDevice));
   }
@@ -2979,7 +3064,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearCentCalcData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
+    hipLaunchKernelGGL(clearCentCalcData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
                                               devOldCentSum[gpuIter],
                                               devNewCentCount[gpuIter],
                                               devOldCentCount[gpuIter],
@@ -2992,7 +3077,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
+    hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
   }
 
   #pragma omp parallel for num_threads(numGPU)
@@ -3000,7 +3085,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   {
     gpuErrchk(hipSetDevice(gpuIter));
     // do single run of naive kmeans for initial centroid assignments
-    hipLaunchKernelGGL(initRunKernel, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+    hipLaunchKernelGGL(initRunKernel, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                          devCentInfo[gpuIter],
                                          devPointData[gpuIter],
                                          devPointLwrs[gpuIter],
@@ -3045,50 +3130,50 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   }
 
   if (numGPU > 1)
+  {
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-        gpuErrchk(hipSetDevice(gpuIter));
-        gpuErrchk(hipMemcpy(allCentInfo[gpuIter],
-                            devCentInfo[gpuIter], sizeof(CentInfo)*numCent,
-                            hipMemcpyDeviceToHost));
-      }
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-        gpuErrchk(hipSetDevice(gpuIter));
-        gpuErrchk(hipMemcpy(allCentData[gpuIter],
-                            devCentData[gpuIter], sizeof(DTYPE)*numCent*numDim,
-                            hipMemcpyDeviceToHost));
-      }
-
-      calcWeightedMeans(newCentInfo, allCentInfo, newCentData, oldCentData,
-        allCentData, newMaxDriftArr, numCent, numGrp, numDim, numGPU);
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-          gpuErrchk(hipSetDevice(gpuIter));
-
-          // copy input data to GPU
-          gpuErrchk(hipMemcpy(devCentInfo[gpuIter],
-                      newCentInfo, sizeof(cent)*numCent,
-                                  hipMemcpyHostToDevice));
-      }
-
-      #pragma omp parallel for num_threads(numGPU)
-      for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
-      {
-          gpuErrchk(hipSetDevice(gpuIter));
-
-          // copy input data to GPU
-          gpuErrchk(hipMemcpy(devCentData[gpuIter],
-                      newCentData, sizeof(DTYPE)*numCent*numDim,
-                                  hipMemcpyHostToDevice));
-      }
+      gpuErrchk(hipSetDevice(gpuIter));
+      gpuErrchk(hipMemcpy(allCentInfo[gpuIter],
+                          devCentInfo[gpuIter], sizeof(CentInfo)*numCent,
+                          hipMemcpyDeviceToHost));
     }
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+      gpuErrchk(hipSetDevice(gpuIter));
+      gpuErrchk(hipMemcpy(allCentData[gpuIter],
+                          devCentData[gpuIter], sizeof(DTYPE)*numCent*numDim,
+                          hipMemcpyDeviceToHost));
+    }
+
+    calcWeightedMeans(newCentInfo, allCentInfo, newCentData, oldCentData,
+      allCentData, newMaxDriftArr, numCent, numGrp, numDim, numGPU);
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+        gpuErrchk(hipSetDevice(gpuIter));
+
+        // copy input data to GPU
+        gpuErrchk(hipMemcpy(devCentInfo[gpuIter],
+                    newCentInfo, sizeof(cent)*numCent,
+                                hipMemcpyHostToDevice));
+    }
+
+    #pragma omp parallel for num_threads(numGPU)
+    for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
+    {
+        gpuErrchk(hipSetDevice(gpuIter));
+
+        // copy input data to GPU
+        gpuErrchk(hipMemcpy(devCentData[gpuIter],
+                    newCentData, sizeof(DTYPE)*numCent*numDim,
+                                hipMemcpyHostToDevice));
+    }
+  }
 
   unsigned int doesNotConverge = 1;
 
@@ -3122,7 +3207,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
+      hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devMaxDriftArr[gpuIter], numGrp);
 
     }
 
@@ -3132,7 +3217,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+      hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                          devPointData[gpuIter],devOldCentSum[gpuIter],
                                          devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                          devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -3144,7 +3229,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+      hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDriftArr[gpuIter],devOldCentCount[gpuIter],
@@ -3212,11 +3297,29 @@ double startSimpleOnGPU(PointInfo *pointInfo,
       }
     }
 
+    /*
+    if (numGPU == 2)
+    {
+      if (index == 20)
+      {
+        writeData(newCentData, numCent, numDim, "centroidsAt1_2gpu.txt");
+      }
+    }
+
+    if (numGPU == 3)
+    {
+      if (index == 20)
+      {
+        writeData(newCentData, numCent, numDim, "centroidsAt1_3gpu.txt");
+      }
+    }
+    */
+
     #pragma omp parallel for num_threads(numGPU)
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(assignPointsSimple, dim3(NBLOCKS), dim3(BLOCKSIZE), grpLclSize, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(assignPointsSimple, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), grpLclSize, 0, devPointInfo[gpuIter],
                                                            devCentInfo[gpuIter],
                                                            devPointData[gpuIter],
                                                            devPointLwrs[gpuIter],
@@ -3232,7 +3335,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                            devConFlagArr[gpuIter],
                                            numPnts[gpuIter]);
 
@@ -3265,7 +3368,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+    hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                         devPointData[gpuIter],devOldCentSum[gpuIter],
                                         devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                         devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -3276,7 +3379,7 @@ double startSimpleOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+    hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDriftArr[gpuIter],devOldCentCount[gpuIter],
@@ -3466,7 +3569,11 @@ double startSuperOnGPU(PointInfo *pointInfo,
 
   int index = 1;
 
-  unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
+  unsigned int NBLOCKS[numGPU]; 
+  for (int i = 0; i < numGPU; i++)
+  {
+    NBLOCKS[i] = ceil(numPnts[i]*1.0/BLOCKSIZE*1.0);
+  }
 
 
   // group centroids
@@ -3487,6 +3594,16 @@ double startSuperOnGPU(PointInfo *pointInfo,
   DTYPE *devPointData[numGPU];
   DTYPE *devPointLwrs[numGPU];
 
+  int currentAllocations[numGPU];
+  for (int i = 0; i < numGPU; i++)
+  {
+    currentAllocations[i] = 0;
+    for (int j = 0; j < i; j++)
+    {
+      currentAllocations[i] += numPnts[j];
+    }
+  }
+
   #pragma omp parallel for num_threads(numGPU)
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
@@ -3497,21 +3614,21 @@ double startSuperOnGPU(PointInfo *pointInfo,
 
     // copy input data to GPU
     gpuErrchk(hipMemcpy(devPointInfo[gpuIter],
-                         pointInfo+(gpuIter*numPnt/numGPU),
+                         pointInfo+currentAllocations[gpuIter],
                          (numPnts[gpuIter])*sizeof(PointInfo),
                          hipMemcpyHostToDevice));
 
     gpuErrchk(hipMalloc(&devPointData[gpuIter], sizeof(DTYPE) * numPnts[gpuIter] * numDim));
 
     gpuErrchk(hipMemcpy(devPointData[gpuIter],
-                         pointData+((gpuIter*numPnt/numGPU) * numDim),
+                         pointData+(currentAllocations[gpuIter] * numDim),
                          sizeof(DTYPE)*numPnts[gpuIter]*numDim,
                          hipMemcpyHostToDevice));
 
     gpuErrchk(hipMalloc(&devPointLwrs[gpuIter], sizeof(DTYPE) * numPnts[gpuIter]));
 
     gpuErrchk(hipMemcpy(devPointLwrs[gpuIter],
-                         pointLwrs+((gpuIter*numPnt/numGPU)),
+                         pointLwrs+currentAllocations[gpuIter],
                          sizeof(DTYPE)*numPnts[gpuIter],
                          hipMemcpyHostToDevice));
   }
@@ -3603,7 +3720,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearCentCalcData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
+    hipLaunchKernelGGL(clearCentCalcData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
                                               devOldCentSum[gpuIter],
                                               devNewCentCount[gpuIter],
                                               devOldCentCount[gpuIter],
@@ -3616,7 +3733,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devMaxDrift[gpuIter], 1);
+    hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devMaxDrift[gpuIter], 1);
   }
 
   // do single run of naive kmeans for initial centroid assignments
@@ -3624,7 +3741,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(initRunKernel, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+    hipLaunchKernelGGL(initRunKernel, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                          devCentInfo[gpuIter],
                                          devPointData[gpuIter],
                                          devPointLwrs[gpuIter],
@@ -3747,7 +3864,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devMaxDrift[gpuIter], 1);
+      hipLaunchKernelGGL(clearDriftArr, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devMaxDrift[gpuIter], 1);
 
     }
 
@@ -3756,7 +3873,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+      hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                          devPointData[gpuIter],devOldCentSum[gpuIter],
                                          devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                          devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -3768,7 +3885,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+      hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDrift[gpuIter],
@@ -3842,7 +3959,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(assignPointsSuper, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(assignPointsSuper, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                                            devCentInfo[gpuIter],
                                                            devPointData[gpuIter],
                                                            devPointLwrs[gpuIter],
@@ -3857,7 +3974,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                            devConFlagArr[gpuIter],
                                            numPnts[gpuIter]);
 
@@ -3888,7 +4005,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+    hipLaunchKernelGGL(calcCentData, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                         devPointData[gpuIter],devOldCentSum[gpuIter],
                                         devNewCentSum[gpuIter],devOldCentCount[gpuIter],
                                         devNewCentCount[gpuIter],numPnts[gpuIter],numDim);
@@ -3899,7 +4016,7 @@ double startSuperOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
+    hipLaunchKernelGGL(calcNewCentroids, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],devCentInfo[gpuIter],
                                              devCentData[gpuIter],devOldCentData[gpuIter],
                                              devOldCentSum[gpuIter],devNewCentSum[gpuIter],
                                              devMaxDrift[gpuIter],devOldCentCount[gpuIter],
@@ -4066,11 +4183,25 @@ double startLloydOnGPU(PointInfo *pointInfo,
 
   int index = 1;
 
-  unsigned int NBLOCKS = ceil(numPnt*1.0/BLOCKSIZE*1.0);
+  unsigned int NBLOCKS[numGPU]; 
+  for (int i = 0; i < numGPU; i++)
+  {
+    NBLOCKS[i] = ceil(numPnts[i]*1.0/BLOCKSIZE*1.0);
+  }
 
   // store dataset on device
   PointInfo *devPointInfo[numGPU];
   DTYPE *devPointData[numGPU];
+
+  int currentAllocations[numGPU];
+  for (int i = 0; i < numGPU; i++)
+  {
+    currentAllocations[i] = 0;
+    for (int j = 0; j < i; j++)
+    {
+      currentAllocations[i] += numPnts[j];
+    }
+  }
 
   #pragma omp parallel for num_threads(numGPU)
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
@@ -4082,14 +4213,14 @@ double startLloydOnGPU(PointInfo *pointInfo,
 
     // copy input data to GPU
     gpuErrchk(hipMemcpy(devPointInfo[gpuIter],
-                         pointInfo+(gpuIter*numPnt/numGPU),
+                         pointInfo+currentAllocations[gpuIter],
                          (numPnts[gpuIter])*sizeof(PointInfo),
                          hipMemcpyHostToDevice));
 
     gpuErrchk(hipMalloc(&devPointData[gpuIter], sizeof(DTYPE) * numPnts[gpuIter] * numDim));
 
     gpuErrchk(hipMemcpy(devPointData[gpuIter],
-                         pointData+((gpuIter*numPnt/numGPU) * numDim),
+                         pointData+(currentAllocations[gpuIter] * numDim),
                          sizeof(DTYPE)*numPnts[gpuIter]*numDim,
                          hipMemcpyHostToDevice));
   }
@@ -4149,7 +4280,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
   for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
   {
     gpuErrchk(hipSetDevice(gpuIter));
-    hipLaunchKernelGGL(clearCentCalcDataLloyd, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
+    hipLaunchKernelGGL(clearCentCalcDataLloyd, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
                                               devNewCentCount[gpuIter],
                                               numCent,
                                               numDim);
@@ -4207,7 +4338,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(assignPointsLloyd, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(assignPointsLloyd, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                                devCentInfo[gpuIter],
                                                devPointData[gpuIter],
                                                devCentData[gpuIter],
@@ -4221,7 +4352,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(clearCentCalcDataLloyd, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
+      hipLaunchKernelGGL(clearCentCalcDataLloyd, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devNewCentSum[gpuIter],
                                          devNewCentCount[gpuIter],
                                          numCent,numDim);
 
@@ -4232,7 +4363,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcCentDataLloyd, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(calcCentDataLloyd, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                          devPointData[gpuIter],
                                          devNewCentSum[gpuIter],
                                          devNewCentCount[gpuIter],
@@ -4245,7 +4376,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(calcNewCentroidsLloyd, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(calcNewCentroidsLloyd, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                              devCentInfo[gpuIter],
                                              devCentData[gpuIter],
                                              devNewCentSum[gpuIter],
@@ -4309,7 +4440,7 @@ double startLloydOnGPU(PointInfo *pointInfo,
     for (gpuIter = 0; gpuIter < numGPU; gpuIter++)
     {
       gpuErrchk(hipSetDevice(gpuIter));
-      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
+      hipLaunchKernelGGL(checkConverge, dim3(NBLOCKS[gpuIter]), dim3(BLOCKSIZE), 0, 0, devPointInfo[gpuIter],
                                            devConFlagArr[gpuIter],
                                            numPnts[gpuIter]);
     }

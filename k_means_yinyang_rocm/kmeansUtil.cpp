@@ -378,6 +378,10 @@ ImpType parseImpString(const char *impString)
   return LLOYDGPU;
   else if(!strcmp(impString, "LLOYDCPU"))
   return LLOYDCPU;
+  else if(!strcmp(impString, "MULTIGPUTEST"))
+  return MULTIGPUTEST;
+  else if(!strcmp(impString, "KEYFILE"))
+  return KEYFILE;
   else
   return INVALIDIMP;
 }
