@@ -118,7 +118,7 @@ TestError validateDataImport(const char *inputfname,
 void printImpName(ImpType imp);
 
 
-#define MSD_PATH "/data/real/YearPredictionMSD.txt"
+#define MSD_PATH "/g/g15/cmtaylor/kmeansYinyang/data/YearPredictionMSD.txt"
 #define MSD_SIZE 515345
 #define MSD_DIM 90
 

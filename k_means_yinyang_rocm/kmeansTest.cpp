@@ -13,10 +13,13 @@ int runValidationTests(ImpType impCode)
   
   if(impCode == MULTIGPUTEST)
   {
-    testResult = runMultiGPUTests(MSD_SIZE, 100, 20, MSD_DIM, 1500, 3, MSD_PATH);
-    printErrorMessage(testResult, testCounter);
-    if(testResult != testSuccess)
-    failFlag = 1;
+    for(int i = 0; i < 8; i++)
+    {
+      testResult = runMultiGPUTests(MSD_SIZE, 100, 20, MSD_DIM, 1500, i+1, MSD_PATH);
+      printErrorMessage(testResult, testCounter);
+      if(testResult != testSuccess)
+      failFlag = 1;
+    }
   }
   else
   {
@@ -70,7 +73,7 @@ TestError runMultiGPUTests(const int numPnt,
   finalResult = testResult;
 
   printf("\n");
-  
+  /*
   testResult = testImpWithKeyImp(FULLGPU, FULLGPU, numPnt, numCent, numGrp, 
                                  numDim, maxIter, 16, 1, numGPU, 0.0001, filepath, 1);
   
@@ -93,7 +96,7 @@ TestError runMultiGPUTests(const int numPnt,
                                  numDim, maxIter, 16, 1, numGPU, 0.0001, filepath, 1);
   
   if(testResult != testSuccess)
-  finalResult = testResult;
+  finalResult = testResult;*/
   
   
   return finalResult;
